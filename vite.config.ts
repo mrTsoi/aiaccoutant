@@ -11,5 +11,14 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    lib: {
+      entry: "src/main.tsx",
+      name: "LedgerAIPreview",
+      formats: ["es"],
+      fileName: "bundle",
+    },
+    rollupOptions: {
+      external: ["react", "react-dom"],
+    },
   },
 });
