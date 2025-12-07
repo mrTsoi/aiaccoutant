@@ -50,35 +50,35 @@ export function PricingSection() {
 
   const getFeaturesList = (plan: SubscriptionPlan) => {
     const features: { text: string; included: boolean }[] = []
-    
+
     // Limits
-    features.push({ 
-      text: plan.max_tenants === -1 ? 'Unlimited Tenants' : `${plan.max_tenants} Tenant${plan.max_tenants > 1 ? 's' : ''}`, 
-      included: true 
+    features.push({
+      text: plan.max_tenants === -1 ? 'Unlimited Tenants' : `${plan.max_tenants} Tenant${plan.max_tenants > 1 ? 's' : ''}`,
+      included: true
     })
-    features.push({ 
-      text: plan.max_documents === -1 ? 'Unlimited Documents' : `${plan.max_documents.toLocaleString()} Documents/mo`, 
-      included: true 
+    features.push({
+      text: plan.max_documents === -1 ? 'Unlimited Documents' : `${plan.max_documents.toLocaleString()} Documents/mo`,
+      included: true
     })
-    features.push({ 
-      text: `${formatStorage(plan.max_storage_bytes)} Storage`, 
-      included: true 
+    features.push({
+      text: `${formatStorage(plan.max_storage_bytes)} Storage`,
+      included: true
     })
 
     // JSON Features
     const featureFlags = (plan.features as any) || {}
-    
-    features.push({ 
-      text: 'AI Automation', 
-      included: !!featureFlags.ai_access 
+
+    features.push({
+      text: 'AI Automation',
+      included: !!featureFlags.ai_access
     })
-    features.push({ 
-      text: 'Custom Domain', 
-      included: !!featureFlags.custom_domain 
+    features.push({
+      text: 'Custom Domain',
+      included: !!featureFlags.custom_domain
     })
-    features.push({ 
-      text: 'SSO / Enterprise Security', 
-      included: !!featureFlags.sso 
+    features.push({
+      text: 'SSO / Enterprise Security',
+      included: !!featureFlags.sso
     })
 
     return features
@@ -104,16 +104,18 @@ export function PricingSection() {
             <span className={`text-sm font-medium ${billingInterval === 'monthly' ? 'text-gray-900' : 'text-gray-500'}`}>Monthly</span>
             <button
               onClick={() => setBillingInterval(prev => prev === 'monthly' ? 'yearly' : 'monthly')}
-              className="relative inline-flex h-6 w-11 items-center rounded-full bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                billingInterval === 'yearly' ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
             >
               <span
-                className={`${
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   billingInterval === 'yearly' ? 'translate-x-6' : 'translate-x-1'
-                } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                }`}
               />
             </button>
             <span className={`text-sm font-medium ${billingInterval === 'yearly' ? 'text-gray-900' : 'text-gray-500'}`}>
-              Yearly <span className="text-green-600 text-xs font-bold ml-1">(Save ~20%)</span>
+              Yearly <span className="text-green-600 font-bold">(Save 20%)</span>
             </span>
           </div>
         </div>
@@ -127,9 +129,9 @@ export function PricingSection() {
             
             // Use explicit price_yearly if available, otherwise calculated
             const yearlyPrice = plan.price_yearly ?? calculatedYearlyPrice
-            
+
             const price = billingInterval === 'monthly' ? (plan.price_monthly || 0) : Math.round(yearlyPrice / 12) // Show monthly equivalent for yearly billing
-            
+
             const isPopular = plan.name === 'Agency Pro' // Hardcoded for visual pop, or could be a DB flag
 
             return (
@@ -146,7 +148,7 @@ export function PricingSection() {
                   <CardTitle className="text-xl">{plan.name}</CardTitle>
                   <CardDescription>{plan.description}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1">
+                <CardContent className="flex-grow">
                   <div className="mb-6">
                     <span className="text-4xl font-bold">{formatPrice(price)}</span>
                     <span className="text-gray-500">/mo</span>

@@ -28,8 +28,8 @@ export function CreateTenantModal() {
       if (!user) throw new Error('Not authenticated')
 
       // 2. Create Tenant (Trigger will check limits)
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
+      const { data: tenant, error: tenantError } = await (supabase
+        .from('tenants') as any)
         .insert({
           name: formData.name,
           slug: formData.slug,
@@ -43,8 +43,8 @@ export function CreateTenantModal() {
       if (tenantError) throw tenantError
 
       // 3. Create Membership for creator
-      const { error: memberError } = await supabase
-        .from('memberships')
+      const { error: memberError } = await (supabase
+        .from('memberships') as any)
         .insert({
           user_id: user.id,
           tenant_id: tenant.id,

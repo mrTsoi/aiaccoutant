@@ -60,12 +60,14 @@ export default function DashboardPage() {
       ])
 
       // 2. Fetch Revenue
-      const { data: plData } = await supabase.rpc('get_profit_loss', {
+      const { data: plDataRaw } = await supabase.rpc('get_profit_loss', {
         p_tenant_id: currentTenant.id,
         p_start_date: startDate,
         p_end_date: endDate
-      })
+      } as any)
       
+      const plData = plDataRaw as any[] | null
+
       const revenue = plData 
         ? plData.filter((row: any) => row.account_type === 'REVENUE').reduce((sum: number, row: any) => sum + row.amount, 0)
         : 0
@@ -92,7 +94,7 @@ export default function DashboardPage() {
       ])
 
       const activities: ActivityItem[] = [
-        ...(recentDocs.data || []).map(d => ({
+        ...(recentDocs.data as any[] || []).map(d => ({
           id: d.id,
           type: 'DOCUMENT' as const,
           title: d.file_name,
@@ -100,7 +102,7 @@ export default function DashboardPage() {
           status: d.status,
           date: d.created_at
         })),
-        ...(recentTx.data || []).map(t => ({
+        ...(recentTx.data as any[] || []).map(t => ({
           id: t.id,
           type: 'TRANSACTION' as const,
           title: t.description || 'Untitled Transaction',

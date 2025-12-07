@@ -66,11 +66,11 @@ export function TenantManagement() {
     try {
       const { data, error } = await supabase.rpc('get_tenant_details', {
         p_tenant_id: tenantId
-      })
+      } as any)
 
       if (error) throw error
-      if (data && data.length > 0) {
-        setSelectedTenant(data[0])
+      if (data && (data as any).length > 0) {
+        setSelectedTenant((data as any)[0])
       }
     } catch (error) {
       console.error('Error fetching tenant details:', error)
@@ -79,8 +79,8 @@ export function TenantManagement() {
 
   const createTenant = async (formData: { name: string; slug: string; locale: string; plan: string }) => {
     try {
-      const { error } = await supabase
-        .from('tenants')
+      const { error } = await (supabase
+        .from('tenants') as any)
         .insert({
           name: formData.name,
           slug: formData.slug,
@@ -103,8 +103,8 @@ export function TenantManagement() {
 
   const toggleTenantStatus = async (tenantId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('tenants')
+      const { error } = await (supabase
+        .from('tenants') as any)
         .update({ is_active: !currentStatus })
         .eq('id', tenantId)
 

@@ -112,8 +112,8 @@ export function TransactionsList({ status }: Props) {
     if (!currentTenant) return
 
     try {
-      let query = supabase
-        .from('transactions')
+      let query = (supabase
+        .from('transactions') as any)
         .select(`
           *,
           documents (
@@ -176,8 +176,8 @@ export function TransactionsList({ status }: Props) {
       description: 'Are you sure you want to void this transaction?',
       action: async () => {
         try {
-          const { error } = await supabase
-            .from('transactions')
+          const { error } = await (supabase
+            .from('transactions') as any)
             .update({ status: 'VOID' })
             .eq('id', id)
 
@@ -202,8 +202,8 @@ export function TransactionsList({ status }: Props) {
       description: 'Are you sure you want to delete this transaction?',
       action: async () => {
         try {
-          const { error } = await supabase
-            .from('transactions')
+          const { error } = await (supabase
+            .from('transactions') as any)
             .delete()
             .eq('id', id)
 
@@ -293,8 +293,8 @@ export function TransactionsList({ status }: Props) {
             return
           }
 
-          const { error } = await supabase
-            .from('transactions')
+          const { error } = await (supabase
+            .from('transactions') as any)
             .update({ status: 'POSTED', posted_at: new Date().toISOString() })
             .in('id', draftsToPost.map(t => t.id))
 
@@ -322,8 +322,8 @@ export function TransactionsList({ status }: Props) {
       action: async () => {
         try {
           const ids = Array.from(selectedIds)
-          const { error } = await supabase
-            .from('transactions')
+          const { error } = await (supabase
+            .from('transactions') as any)
             .update({ status: 'VOID' })
             .in('id', ids)
 
@@ -359,8 +359,8 @@ export function TransactionsList({ status }: Props) {
 
           if (draftsToDelete.length === 0) return
 
-          const { error } = await supabase
-            .from('transactions')
+          const { error } = await (supabase
+            .from('transactions') as any)
             .delete()
             .in('id', draftsToDelete.map(t => t.id))
 
@@ -489,8 +489,8 @@ export function TransactionsList({ status }: Props) {
 
           // Perform Delete
           if (txIdsToDelete.length > 0) {
-            const { error } = await supabase
-              .from('transactions')
+            const { error } = await (supabase
+              .from('transactions') as any)
               .delete()
               .in('id', txIdsToDelete)
             if (error) throw error
@@ -498,8 +498,8 @@ export function TransactionsList({ status }: Props) {
 
           // Perform Void
           if (txIdsToVoid.length > 0) {
-            const { error } = await supabase
-              .from('transactions')
+            const { error } = await (supabase
+              .from('transactions') as any)
               .update({ status: 'VOID' })
               .in('id', txIdsToVoid)
             if (error) throw error

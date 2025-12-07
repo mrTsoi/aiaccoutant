@@ -35,7 +35,7 @@ export function ProfitLossReport() {
     try {
       setLoading(true)
 
-      const { data: reportData, error } = await supabase.rpc('get_profit_loss', {
+      const { data: reportData, error } = await (supabase.rpc as any)('get_profit_loss', {
         p_tenant_id: currentTenant.id,
         p_start_date: startDate,
         p_end_date: endDate

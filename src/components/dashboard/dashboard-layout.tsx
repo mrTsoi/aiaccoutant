@@ -18,9 +18,25 @@ import {
   Menu,
   X,
   FolderTree,
-  Landmark
+  Landmark,
+  Check,
+  ChevronsUpDown
 } from 'lucide-react'
 import { useState } from 'react'
+import { cn } from "@/lib/utils"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 import { CreateTenantModal } from '@/components/tenant/create-tenant-modal'
 
@@ -44,6 +60,7 @@ export default function DashboardLayout({
   const pathname = usePathname() // Use usePathname hook
   const supabase = createClient()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [open, setOpen] = useState(false)
 
   const navigationItems: NavItem[] = [
     {
@@ -150,17 +167,52 @@ export default function DashboardLayout({
                 <label className="block text-xs font-medium text-gray-500 mb-2">
                   Current Company
                 </label>
-                <select
-                  value={currentTenant?.id || ''}
-                  onChange={(e) => switchTenant(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {tenants.map((tenant) => (
-                    <option key={tenant.id} value={tenant.id}>
-                      {tenant.name}
-                    </option>
-                  ))}
-                </select>
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={open}
+                      className="w-full justify-between"
+                    >
+                      <span className="truncate">
+                        {currentTenant
+                          ? tenants.find((tenant) => tenant.id === currentTenant.id)?.name
+                          : "Select company..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[220px] p-0">
+                    <Command>
+                      <CommandInput placeholder="Search company..." />
+                      <CommandList>
+                        <CommandEmpty>No company found.</CommandEmpty>
+                        <CommandGroup>
+                          {tenants.map((tenant) => (
+                            <CommandItem
+                              key={tenant.id}
+                              value={tenant.name}
+                              onSelect={() => {
+                                switchTenant(tenant.id)
+                                setOpen(false)
+                              }}
+                              className="cursor-pointer data-[disabled]:opacity-100 data-[disabled]:pointer-events-auto"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  currentTenant?.id === tenant.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {tenant.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
             <CreateTenantModal />

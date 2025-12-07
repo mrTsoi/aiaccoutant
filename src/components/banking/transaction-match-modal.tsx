@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Plus, Loader2, Search } from 'lucide-react'
+import { toast } from "sonner"
 
 type BankTransaction = Database['public']['Tables']['bank_transactions']['Row']
 type Transaction = Database['public']['Tables']['transactions']['Row']
@@ -188,8 +189,8 @@ export function TransactionMatchModal({ bankTransaction, isOpen, onClose, onMatc
       // If it fails, we fallback to single match logic for the first one.
       
       // Try multi-match first
-      const { error: junctionError } = await supabase
-        .from('bank_transaction_matches')
+      const { error: junctionError } = await (supabase
+        .from('bank_transaction_matches') as any)
         .insert(
           selectedIds.map(id => ({
             bank_transaction_id: bankTransaction.id,
@@ -201,8 +202,8 @@ export function TransactionMatchModal({ bankTransaction, isOpen, onClose, onMatc
       if (junctionError) {
           console.warn('Multi-match table might not exist, falling back to single match', junctionError)
           // Fallback: Update bank_transaction with the first ID
-          const { error: btError } = await supabase
-            .from('bank_transactions')
+          const { error: btError } = await (supabase
+            .from('bank_transactions') as any)
             .update({
               status: 'MATCHED',
               matched_transaction_id: selectedIds[0]
@@ -212,8 +213,8 @@ export function TransactionMatchModal({ bankTransaction, isOpen, onClose, onMatc
           if (btError) throw btError
       } else {
           // If junction insert succeeded, update status
-          const { error: statusError } = await supabase
-            .from('bank_transactions')
+          const { error: statusError } = await (supabase
+            .from('bank_transactions') as any)
             .update({
               status: 'MATCHED',
               // We can leave matched_transaction_id null or set to first one as primary
@@ -245,8 +246,8 @@ export function TransactionMatchModal({ bankTransaction, isOpen, onClose, onMatc
         setMatching(true)
         
         // 1. Create Transaction
-        const { data: newTx, error: txError } = await supabase
-            .from('transactions')
+        const { data: newTx, error: txError } = await (supabase
+            .from('transactions') as any)
             .insert({
                 tenant_id: bankTransaction.tenant_id,
                 transaction_date: bankTransaction.transaction_date,
@@ -269,10 +270,10 @@ export function TransactionMatchModal({ bankTransaction, isOpen, onClose, onMatc
         
         const isCredit = bankTransaction.transaction_type === 'CREDIT'
         
-        const { error: liError } = await supabase
-            .from('line_items')
+        const { error: liError } = await (supabase
+            .from('line_items') as any)
             .insert({
-                transaction_id: newTx.id,
+                transaction_id: (newTx as any).id,
                 account_id: newTxAccount,
                 debit: !isCredit ? bankTransaction.amount : 0,
                 credit: isCredit ? bankTransaction.amount : 0,
@@ -283,20 +284,20 @@ export function TransactionMatchModal({ bankTransaction, isOpen, onClose, onMatc
 
         // 3. Match it
         // We use the same logic as confirm match
-        const { error: matchError } = await supabase
-            .from('bank_transactions')
+        const { error: matchError } = await (supabase
+            .from('bank_transactions') as any)
             .update({
                 status: 'MATCHED',
-                matched_transaction_id: newTx.id
+                matched_transaction_id: (newTx as any).id
             })
             .eq('id', bankTransaction.id)
             
         if (matchError) throw matchError
         
         // Also try to insert into junction table for consistency
-        await supabase.from('bank_transaction_matches').insert({
+        await (supabase.from('bank_transaction_matches') as any).insert({
             bank_transaction_id: bankTransaction.id,
-            transaction_id: newTx.id,
+            transaction_id: (newTx as any).id,
             match_type: 'MANUAL'
         })
 

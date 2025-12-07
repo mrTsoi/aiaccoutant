@@ -36,8 +36,8 @@ export function BankStatementUpload({ accountId, onUploadComplete }: Props) {
       if (uploadError) throw uploadError
 
       // 2. Create document record
-      const { data: doc, error: docError } = await supabase
-        .from('documents')
+      const { data: doc, error: docError } = await (supabase
+        .from('documents') as any)
         .insert({
           tenant_id: currentTenant.id,
           file_path: filePath,
@@ -82,12 +82,12 @@ export function BankStatementUpload({ accountId, onUploadComplete }: Props) {
       // Let's modify the document schema? No, let's use the metadata field in document_data if possible, but that's created later.
       
       // Alternative: Create a placeholder bank_statement record NOW.
-      const { error: stmtError } = await supabase
-        .from('bank_statements')
+      const { error: stmtError } = await (supabase
+        .from('bank_statements') as any)
         .insert({
           tenant_id: currentTenant.id,
           bank_account_id: accountId,
-          document_id: doc.id,
+          document_id: (doc as any).id,
           status: 'IMPORTED' // Will be updated to PROCESSED by AI
         })
 

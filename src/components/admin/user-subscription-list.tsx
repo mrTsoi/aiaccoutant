@@ -82,8 +82,8 @@ export function UserSubscriptionList() {
 
   const handleStatusChange = async (subId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
-        .from('user_subscriptions')
+      const { error } = await (supabase
+        .from('user_subscriptions') as any)
         .update({ status: newStatus })
         .eq('id', subId)
 
@@ -97,8 +97,8 @@ export function UserSubscriptionList() {
 
   const handlePlanChange = async (subId: string, planId: string) => {
     try {
-      const { error } = await supabase
-        .from('user_subscriptions')
+      const { error } = await (supabase
+        .from('user_subscriptions') as any)
         .update({ plan_id: planId })
         .eq('id', subId)
 

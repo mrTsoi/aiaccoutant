@@ -50,8 +50,8 @@ export function BankAccountList() {
     if (!confirm('Are you sure you want to delete this bank account?')) return
 
     try {
-      const { error } = await supabase
-        .from('bank_accounts')
+      const { error } = await (supabase
+        .from('bank_accounts') as any)
         .update({ is_active: false })
         .eq('id', id)
 

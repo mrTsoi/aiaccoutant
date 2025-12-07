@@ -52,8 +52,8 @@ export function ExchangeRateList() {
   const fetchRates = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('exchange_rates')
+      const { data, error } = await (supabase
+        .from('exchange_rates') as any)
         .select('*')
         .eq('tenant_id', currentTenant!.id)
         .order('currency')
@@ -72,8 +72,8 @@ export function ExchangeRateList() {
 
     try {
       setSaving(true)
-      const { error } = await supabase
-        .from('exchange_rates')
+      const { error } = await (supabase
+        .from('exchange_rates') as any)
         .insert({
           tenant_id: currentTenant.id,
           currency: newRate.currency,
@@ -98,8 +98,8 @@ export function ExchangeRateList() {
     if (!confirm('Are you sure you want to remove this custom exchange rate?')) return
 
     try {
-      const { error } = await supabase
-        .from('exchange_rates')
+      const { error } = await (supabase
+        .from('exchange_rates') as any)
         .delete()
         .eq('id', id)
 
@@ -113,8 +113,8 @@ export function ExchangeRateList() {
 
   const handleUpdateRate = async (id: string, newRateValue: number) => {
     try {
-      const { error } = await supabase
-        .from('exchange_rates')
+      const { error } = await (supabase
+        .from('exchange_rates') as any)
         .update({ rate: newRateValue })
         .eq('id', id)
 

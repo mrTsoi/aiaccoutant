@@ -148,8 +148,8 @@ export function ReconciliationFeed({ accountId }: Props) {
 
     try {
       // 1. Update bank_transaction status
-      const { error: btError } = await supabase
-        .from('bank_transactions')
+      const { error: btError } = await (supabase
+        .from('bank_transactions') as any)
         .update({
           status: 'PENDING',
           matched_transaction_id: null
@@ -241,8 +241,8 @@ export function ReconciliationFeed({ accountId }: Props) {
             const bestMatch = result.matches?.[0]
             if (bestMatch && bestMatch.confidence_score >= 0.9) {
                // Auto match!
-               await supabase
-                .from('bank_transactions')
+               await (supabase
+                .from('bank_transactions') as any)
                 .update({
                   status: 'MATCHED',
                   matched_transaction_id: bestMatch.transaction.id,
@@ -250,7 +250,7 @@ export function ReconciliationFeed({ accountId }: Props) {
                 })
                 .eq('id', tx.id)
                 
-               await supabase.from('bank_transaction_matches').insert({
+               await (supabase.from('bank_transaction_matches') as any).insert({
                   bank_transaction_id: tx.id,
                   transaction_id: bestMatch.transaction.id,
                   match_type: 'EXACT' // AI Exact
@@ -326,8 +326,8 @@ export function ReconciliationFeed({ accountId }: Props) {
 
   const handleBulkExclude = async () => {
     try {
-      const { error } = await supabase
-        .from('bank_transactions')
+      const { error } = await (supabase
+        .from('bank_transactions') as any)
         .update({ status: 'EXCLUDED' })
         .in('id', Array.from(selectedIds))
 

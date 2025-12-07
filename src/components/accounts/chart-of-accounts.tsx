@@ -80,8 +80,8 @@ export function ChartOfAccounts() {
     try {
       if (editingAccount) {
         // Update existing
-        const { error } = await supabase
-          .from('chart_of_accounts')
+        const { error } = await (supabase
+          .from('chart_of_accounts') as any)
           .update({
             code: account.code,
             name: account.name,
@@ -96,8 +96,8 @@ export function ChartOfAccounts() {
         if (error) throw error
       } else {
         // Create new
-        const { error } = await supabase
-          .from('chart_of_accounts')
+        const { error } = await (supabase
+          .from('chart_of_accounts') as any)
           .insert({
             tenant_id: currentTenant.id,
             code: account.code!,

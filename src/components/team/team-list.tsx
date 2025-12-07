@@ -47,8 +47,8 @@ export function TeamList() {
   const fetchMembers = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('memberships')
+      const { data, error } = await (supabase
+        .from('memberships') as any)
         .select(`
           *,
           profiles (*)
@@ -72,8 +72,8 @@ export function TeamList() {
       setInviting(true)
       
       // 1. Check if user exists
-      const { data: users, error: userError } = await supabase
-        .from('profiles')
+      const { data: users, error: userError } = await (supabase
+        .from('profiles') as any)
         .select('id')
         .eq('email', inviteEmail)
         .single()
@@ -84,11 +84,11 @@ export function TeamList() {
       }
 
       // 2. Check if already a member
-      const { data: existingMember } = await supabase
-        .from('memberships')
+      const { data: existingMember } = await (supabase
+        .from('memberships') as any)
         .select('id')
         .eq('tenant_id', currentTenant.id)
-        .eq('user_id', users.id)
+        .eq('user_id', (users as any).id)
         .single()
 
       if (existingMember) {
@@ -97,11 +97,11 @@ export function TeamList() {
       }
 
       // 3. Add membership
-      const { error: inviteError } = await supabase
-        .from('memberships')
+      const { error: inviteError } = await (supabase
+        .from('memberships') as any)
         .insert({
           tenant_id: currentTenant.id,
-          user_id: users.id,
+          user_id: (users as any).id,
           role: inviteRole,
           is_active: true
         })
@@ -124,8 +124,8 @@ export function TeamList() {
     if (!confirm('Are you sure you want to remove this member?')) return
 
     try {
-      const { error } = await supabase
-        .from('memberships')
+      const { error } = await (supabase
+        .from('memberships') as any)
         .delete()
         .eq('id', memberId)
 
@@ -140,8 +140,8 @@ export function TeamList() {
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
     try {
-      const { error } = await supabase
-        .from('memberships')
+      const { error } = await (supabase
+        .from('memberships') as any)
         .update({ role: newRole as any })
         .eq('id', memberId)
 

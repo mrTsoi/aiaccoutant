@@ -39,8 +39,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       // Fetch user's memberships
-      const { data: membershipData, error: membershipError } = await supabase
-        .from('memberships')
+      const { data: membershipData, error: membershipError } = await (supabase
+        .from('memberships') as any)
         .select('*')
         .eq('user_id', user.id)
 
@@ -51,19 +51,19 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       // Filter active memberships client-side
-      const activeMemberships = (membershipData || []).filter(m => m.is_active !== false)
+      const activeMemberships = (membershipData || []).filter((m: any) => m.is_active !== false)
       setMemberships(activeMemberships)
 
       // Check for Super Admin role
-      const superAdminStatus = activeMemberships.some(m => m.role === 'SUPER_ADMIN')
+      const superAdminStatus = activeMemberships.some((m: any) => m.role === 'SUPER_ADMIN')
       setIsSuperAdmin(superAdminStatus)
 
       let tenantData: Tenant[] = []
 
       if (superAdminStatus) {
         // Super Admin sees ALL tenants
-        const { data, error } = await supabase
-          .from('tenants')
+        const { data, error } = await (supabase
+          .from('tenants') as any)
           .select('*')
           .order('name')
         
@@ -74,10 +74,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // Regular users see only their tenants
-        const tenantIds = activeMemberships?.map((m) => m.tenant_id) || []
+        const tenantIds = activeMemberships?.map((m: any) => m.tenant_id) || []
         if (tenantIds.length > 0) {
-          const { data, error } = await supabase
-            .from('tenants')
+          const { data, error } = await (supabase
+            .from('tenants') as any)
             .select('*')
             .in('id', tenantIds)
 

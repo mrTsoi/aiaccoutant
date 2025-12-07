@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     const results = []
 
-    for (const code of codes) {
+    for (const code of (codes as any[])) {
       try {
         // Check if coupon exists
         try {

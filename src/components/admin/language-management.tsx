@@ -62,7 +62,7 @@ export function LanguageManagement() {
   const handleAddLanguage = async () => {
     if (!newLanguage.code || !newLanguage.name) return
 
-    const { error } = await supabase.from('system_languages').insert([
+    const { error } = await (supabase.from('system_languages') as any).insert([
       {
         code: newLanguage.code,
         name: newLanguage.name,
@@ -97,8 +97,8 @@ export function LanguageManagement() {
       return
     }
 
-    const { error } = await supabase
-      .from('system_languages')
+    const { error } = await (supabase
+      .from('system_languages') as any)
       .update({ is_active: !currentState })
       .eq('code', code)
 
@@ -120,16 +120,16 @@ export function LanguageManagement() {
     // Ideally we should have a database constraint or trigger.
     
     // Let's try to update all others to false first.
-    await supabase
-      .from('system_languages')
+    await (supabase
+      .from('system_languages') as any)
       .update({ is_default: false })
       .neq('code', code) // Update all except the new one (though we want to update ALL to false really, but let's do this)
     
     // Actually, just update ALL to false.
-    await supabase
-      .from('system_languages')
+    await (supabase
+      .from('system_languages') as any)
       .update({ is_default: false })
-      .neq('code', 'PLACEHOLDER') // Hack to match all rows? No, just omit filter? 
+      .neq('code', 'PLACEHOLDER') // Hack to match all rows? No, just omit filter?  
       // .update requires a filter usually.
       // Let's iterate or use a better query.
       
@@ -137,8 +137,8 @@ export function LanguageManagement() {
     // 1. Set the new one to true.
     // 2. Set all others to false.
     
-    const { error } = await supabase
-      .from('system_languages')
+    const { error } = await (supabase
+      .from('system_languages') as any)
       .update({ is_default: true, is_active: true }) // Ensure it's active
       .eq('code', code)
 
@@ -148,8 +148,8 @@ export function LanguageManagement() {
     }
 
     // Set others to false
-    await supabase
-      .from('system_languages')
+    await (supabase
+      .from('system_languages') as any)
       .update({ is_default: false })
       .neq('code', code)
 
@@ -159,8 +159,8 @@ export function LanguageManagement() {
   const deleteLanguage = async (code: string) => {
     if (!confirm('Are you sure you want to delete this language?')) return
 
-    const { error } = await supabase
-      .from('system_languages')
+    const { error } = await (supabase
+      .from('system_languages') as any)
       .delete()
       .eq('code', code)
 

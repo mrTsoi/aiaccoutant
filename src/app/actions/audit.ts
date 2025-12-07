@@ -44,7 +44,7 @@ export async function auditTransactions(tenantId: string): Promise<AuditIssue[]>
 
   // 2. Fetch Tenant Name for validation
   const { data: tenant } = await supabase.from('tenants').select('name').eq('id', tenantId).single()
-  const tenantName = tenant?.name?.toLowerCase() || ''
+  const tenantName = (tenant as any)?.name?.toLowerCase() || ''
 
   // 3. Analyze
   const seenRefs = new Map<string, string>() // ref -> txId
@@ -57,7 +57,7 @@ export async function auditTransactions(tenantId: string): Promise<AuditIssue[]>
   // For same-document duplicate detection
   const txByHash = new Map<string, any[]>()
 
-  for (const tx of transactions) {
+  for (const tx of (transactions as any[] || [])) {
     const totalDebits = tx.line_items.reduce((sum: number, li: any) => sum + (li.debit || 0), 0)
     const totalCredits = tx.line_items.reduce((sum: number, li: any) => sum + (li.credit || 0), 0)
     const amount = Math.max(totalDebits, totalCredits)
@@ -68,7 +68,7 @@ export async function auditTransactions(tenantId: string): Promise<AuditIssue[]>
     const dd = Array.isArray(docData) ? docData[0] : docData
 
     // Debug: Log first transaction structure
-    if (transactions.indexOf(tx) === 0) {
+    if ((transactions as any[]).indexOf(tx) === 0) {
       console.log('Sample Transaction Structure:', JSON.stringify({
         id: tx.id,
         documents: tx.documents,
@@ -252,7 +252,7 @@ export async function auditTransactions(tenantId: string): Promise<AuditIssue[]>
               description: tx.description || 'Unknown Transaction',
               issueType: 'WRONG_TENANT',
               severity: 'MEDIUM',
-              details: `Tenant '${tenant?.name}' not found in document vendor/customer`
+              details: `Tenant '${(tenant as any)?.name}' not found in document vendor/customer`
             })
           }
        }

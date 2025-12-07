@@ -35,7 +35,7 @@ export function StripeSettings() {
         .single()
 
       if (data) {
-        setConfig(data.setting_value as any)
+        setConfig((data as any).setting_value as any)
       }
     } catch (error) {
       console.error('Error loading Stripe settings:', error)
@@ -47,8 +47,8 @@ export function StripeSettings() {
   const handleSave = async () => {
     try {
       setLoading(true)
-      const { error } = await supabase
-        .from('system_settings')
+      const { error } = await (supabase
+        .from('system_settings') as any)
         .upsert({
           setting_key: 'stripe_config',
           setting_value: config,

@@ -73,9 +73,9 @@ export function SystemOverview() {
         supabase.rpc('get_subscription_stats')
       ])
 
-      if (statsRes.data && statsRes.data.length > 0) setStats(statsRes.data[0])
-      if (trendsRes.data) setTrends(trendsRes.data)
-      if (revenueRes.data && revenueRes.data.length > 0) setRevenue(revenueRes.data[0])
+      if ((statsRes as any).data && (statsRes as any).data.length > 0) setStats((statsRes as any).data[0])
+      if ((trendsRes as any).data) setTrends((trendsRes as any).data)
+      if ((revenueRes as any).data && (revenueRes as any).data.length > 0) setRevenue((revenueRes as any).data[0])
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)

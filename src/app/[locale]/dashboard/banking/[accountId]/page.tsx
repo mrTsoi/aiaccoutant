@@ -41,7 +41,7 @@ export default function BankAccountPage() {
       const { data: latestStatement } = await supabase
         .from('bank_statements')
         .select('closing_balance, end_date')
-        .eq('bank_account_id', accountId)
+        .eq('bank_account_id', accountId as string)
         .order('end_date', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -52,11 +52,11 @@ export default function BankAccountPage() {
         .from('bank_transactions')
         .select('id, bank_statements!inner(bank_account_id)', { count: 'exact', head: true })
         .eq('status', 'PENDING')
-        .eq('bank_statements.bank_account_id', accountId)
+        .eq('bank_statements.bank_account_id', accountId as string)
 
       setStats({
-        currentBalance: latestStatement?.closing_balance || 0,
-        lastStatementDate: latestStatement?.end_date || null,
+        currentBalance: (latestStatement as any)?.closing_balance || 0,
+        lastStatementDate: (latestStatement as any)?.end_date || null,
         unreconciledCount: pendingCount || 0
       })
     } catch (error) {

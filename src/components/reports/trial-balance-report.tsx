@@ -37,7 +37,7 @@ export function TrialBalanceReport() {
     try {
       setLoading(true)
 
-      const { data: reportData, error } = await supabase.rpc('get_trial_balance', {
+      const { data: reportData, error } = await (supabase.rpc as any)('get_trial_balance', {
         p_tenant_id: currentTenant.id,
         p_start_date: startDate || null,
         p_end_date: endDate || null

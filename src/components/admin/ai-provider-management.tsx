@@ -52,7 +52,7 @@ export function AIProviderManagement() {
 
       if (error) throw error
 
-      const mapped: AIProvider[] = (data || []).map(p => {
+      const mapped: AIProvider[] = (data || []).map((p: any) => {
         const config = (p.config || {}) as any
         return {
           ...p,
@@ -94,8 +94,8 @@ export function AIProviderManagement() {
           per_day_limit_default: per_day_limit_default ?? 20000,
         }
 
-        const { error } = await supabase
-          .from('ai_providers')
+        const { error } = await (supabase
+          .from('ai_providers') as any)
           .update({
             is_active,
             config: nextConfig,
@@ -147,8 +147,8 @@ export function AIProviderManagement() {
       setSaving(true)
       setError(null)
 
-      const { error } = await supabase
-        .from('ai_providers')
+      const { error } = await (supabase
+        .from('ai_providers') as any)
         .update({ config: parsed })
         .eq('id', editingProvider.id)
 
@@ -411,8 +411,8 @@ export function AIProviderManagement() {
                       setSaving(true)
                       setError(null)
 
-                      const { error } = await supabase
-                        .from('ai_providers')
+                      const { error } = await (supabase
+                        .from('ai_providers') as any)
                         .update({
                           api_endpoint: editingProvider.api_endpoint,
                           config: parsed,

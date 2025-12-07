@@ -68,10 +68,10 @@ export function AuditLogViewer() {
       if (error) throw error
 
       // Flatten profile data
-      const logsWithUser = (data || []).map(log => ({
+      const logsWithUser = (data || []).map((log: any) => ({
         ...log,
-        user_email: (log as any).profiles?.email,
-        user_full_name: (log as any).profiles?.full_name
+        user_email: log.profiles?.email,
+        user_full_name: log.profiles?.full_name
       }))
 
       setLogs(logsWithUser)

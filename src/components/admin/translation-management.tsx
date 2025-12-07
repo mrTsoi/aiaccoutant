@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Plus, Save, Trash2, Search } from 'lucide-react'
+import { Loader2, Plus, Save, Trash2, Search, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { toast } from "sonner"
 
@@ -93,7 +93,7 @@ export function TranslationManagement() {
       setLanguages(data)
       // Set default if not set
       if (!selectedLocale && data.length > 0) {
-        setSelectedLocale(data[0].code)
+        setSelectedLocale((data[0] as any).code)
       }
     }
   }
@@ -118,7 +118,7 @@ export function TranslationManagement() {
   const handleAdd = async () => {
     if (!newKey || !newValue) return
 
-    const { error } = await supabase.from('app_translations').insert([
+    const { error } = await (supabase.from('app_translations') as any).insert([
       {
         locale: selectedLocale,
         namespace: selectedNamespace,
@@ -140,8 +140,8 @@ export function TranslationManagement() {
   }
 
   const handleUpdate = async (id: string) => {
-    const { error } = await supabase
-      .from('app_translations')
+    const { error } = await (supabase
+      .from('app_translations') as any)
       .update({ value: editValue })
       .eq('id', id)
     if (error) {
@@ -151,23 +151,21 @@ export function TranslationManagement() {
       toast.success('Translation updated successfully')
       setEditingId(null)
       fetchTranslations()
-    } fetchTranslations()
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure?')) return
 
-    const { error } = await supabase
-      .from('app_translations')
+    const { error } = await (supabase
+      .from('app_translations') as any)
       .delete()
+      .eq('id', id)
     if (error) {
       console.error('Error deleting translation:', error)
       toast.error('Failed to delete translation')
     } else {
       toast.success('Translation deleted successfully')
-      fetchTranslations()
-    } else {
       fetchTranslations()
     }
   }
@@ -340,26 +338,5 @@ export function TranslationManagement() {
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-// Helper icon
-function X({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
   )
 }

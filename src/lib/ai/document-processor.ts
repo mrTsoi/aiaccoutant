@@ -63,8 +63,8 @@ export class AIProcessingService {
       const supabase = await createClient()
 
       // 1. Get document details
-      const { data: document, error: docError } = await supabase
-        .from('documents')
+      const { data: document, error: docError } = await (supabase
+        .from('documents') as any)
         .select('*, tenants(name, currency)')
         .eq('id', documentId)
         .single()
@@ -78,8 +78,8 @@ export class AIProcessingService {
       const tenantCurrency = (document as any).tenants?.currency || 'USD'
 
       // 2. Update status to PROCESSING
-      await supabase
-        .from('documents')
+      await (supabase
+        .from('documents') as any)
         .update({ status: 'PROCESSING' })
         .eq('id', documentId)
 
@@ -87,7 +87,7 @@ export class AIProcessingService {
       // Download file to calculate hash
       const { data: fileData, error: downloadError } = await supabase.storage
         .from('documents')
-        .download(document.file_path)
+        .download((document as any).file_path)
 
       if (downloadError || !fileData) throw new Error('Failed to download file from storage')
 
@@ -96,10 +96,10 @@ export class AIProcessingService {
       const hash = crypto.createHash('sha256').update(buffer).digest('hex')
 
       // Check for duplicates
-      const { data: duplicates } = await supabase
-        .from('documents')
+      const { data: duplicates } = await (supabase
+        .from('documents') as any)
         .select('id')
-        .eq('tenant_id', document.tenant_id)
+        .eq('tenant_id', (document as any).tenant_id)
         .eq('content_hash', hash)
         .neq('id', documentId) // Exclude self
       
@@ -116,8 +116,8 @@ export class AIProcessingService {
         // Find if there is an existing transaction for the original document
         // We use the first duplicate found as the "original"
         const originalDocId = duplicates[0].id
-        const { data: existingTx } = await supabase
-          .from('transactions')
+        const { data: existingTx } = await (supabase
+          .from('transactions') as any)
           .select('id')
           .eq('document_id', originalDocId)
           .maybeSingle()
@@ -129,8 +129,8 @@ export class AIProcessingService {
       }
 
       // Update document with hash
-      await supabase
-        .from('documents')
+      await (supabase
+        .from('documents') as any)
         .update({ 
           content_hash: hash,
           validation_status: validationStatus,
@@ -141,7 +141,7 @@ export class AIProcessingService {
       // --- DUPLICATE DETECTION END ---
 
       // 3. Get Tenant AI Configuration
-      const aiConfig = await this.getTenantAIConfig(document.tenant_id)
+      const aiConfig = await this.getTenantAIConfig((document as any).tenant_id)
       
       // --- RATE LIMIT CHECK START ---
       if (aiConfig && aiConfig.ai_providers) {
@@ -153,8 +153,8 @@ export class AIProcessingService {
           if (limitMin > 0 || limitHour > 0 || limitDay > 0) {
               try {
                   // We use a try-catch here because the RPC function might not exist if migration wasn't run
-                  const { data: isAllowed, error: limitError } = await supabase.rpc('check_ai_rate_limit', {
-                      p_tenant_id: document.tenant_id,
+                  const { data: isAllowed, error: limitError } = await (supabase.rpc as any)('check_ai_rate_limit', {
+                      p_tenant_id: (document as any).tenant_id,
                       p_provider_id: aiConfig.ai_providers.id,
                       p_limit_min: limitMin,
                       p_limit_hour: limitHour,
@@ -201,8 +201,8 @@ export class AIProcessingService {
       // --- LOG USAGE START ---
       try {
           if (aiConfig?.ai_providers?.id) {
-            await supabase.from('ai_usage_logs').insert({
-                tenant_id: document.tenant_id,
+            await (supabase.from('ai_usage_logs') as any).insert({
+                tenant_id: (document as any).tenant_id,
                 ai_provider_id: aiConfig.ai_providers.id,
                 model: aiConfig.model_name || (aiConfig.ai_providers.config as any)?.models?.[0] || 'unknown',
                 status: 'success',
@@ -217,10 +217,10 @@ export class AIProcessingService {
 
       // --- TENANT VALIDATION START ---
       // Check if tenant name appears in either vendor or customer fields
-      const { data: tenant } = await supabase
-        .from('tenants')
+      const { data: tenant } = await (supabase
+        .from('tenants') as any)
         .select('name')
-        .eq('id', document.tenant_id)
+        .eq('id', (document as any).tenant_id)
         .single()
       
       if (tenant) {
@@ -243,10 +243,10 @@ export class AIProcessingService {
                   isTenantMatch = true
               } else if (extractedData.account_number) {
                   // If we have an account number, check if it matches any of our bank accounts
-                  const { data: existingAccount } = await supabase
-                      .from('bank_accounts')
+                  const { data: existingAccount } = await (supabase
+                      .from('bank_accounts') as any)
                       .select('id')
-                      .eq('tenant_id', document.tenant_id)
+                      .eq('tenant_id', (document as any).tenant_id)
                       .ilike('account_number', `%${extractedData.account_number}%`)
                       .maybeSingle()
                   
@@ -288,8 +288,8 @@ export class AIProcessingService {
               console.log(`Potential wrong tenant detected. Tenant: ${tenantName}`)
               
               // Update flags
-              await supabase
-              .from('documents')
+              await (supabase
+              .from('documents') as any)
               .update({ 
                 validation_status: validationStatus,
                 validation_flags: validationFlags
@@ -319,8 +319,8 @@ export class AIProcessingService {
 
       // Save extracted data to DB
       // We use upsert to handle re-processing of the same document
-      const { error: dataError } = await supabase
-        .from('document_data')
+      const { error: dataError } = await (supabase
+        .from('document_data') as any)
         .upsert(documentData, { onConflict: 'document_id' })
       
       if (dataError) {
@@ -338,8 +338,8 @@ export class AIProcessingService {
       // 7. Update document status to PROCESSED (or keep as NEEDS_REVIEW if flagged)
       // If validation failed, we might want to keep it as PROCESSED but with validation_status = NEEDS_REVIEW
       // The UI should show "Processed (Needs Review)"
-      await supabase
-        .from('documents')
+      await (supabase
+        .from('documents') as any)
         .update({ 
           status: 'PROCESSED',
           processed_at: new Date().toISOString(),
@@ -368,8 +368,8 @@ export class AIProcessingService {
 
       // Update status to FAILED
       const supabase = await createClient()
-      await supabase
-        .from('documents')
+      await (supabase
+        .from('documents') as any)
         .update({ 
           status: 'FAILED',
           error_message: errorMessage
@@ -1277,8 +1277,8 @@ export class AIProcessingService {
     const supabase = await createClient()
 
     // 1. Try tenant-specific configuration first
-    const { data: tenantConfig } = await supabase
-      .from('tenant_ai_configurations')
+    const { data: tenantConfig } = await (supabase
+      .from('tenant_ai_configurations') as any)
       .select(`
         *,
         ai_providers (*)
@@ -1294,8 +1294,8 @@ export class AIProcessingService {
     // 2. Fallback to a platform-level default provider
     // Currently we treat the first active provider as the default.
     // Later, we can add an explicit is_default flag in ai_providers.
-    const { data: defaultProvider } = await supabase
-      .from('ai_providers')
+    const { data: defaultProvider } = await (supabase
+      .from('ai_providers') as any)
       .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: true })

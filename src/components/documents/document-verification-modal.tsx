@@ -166,8 +166,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       setLoading(true)
       
       // Fetch document
-      const { data: doc, error: docError } = await supabase
-        .from('documents')
+      const { data: doc, error: docError } = await (supabase
+        .from('documents') as any)
         .select('*')
         .eq('id', documentId)
         .single()
@@ -176,8 +176,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       setDocument(doc)
 
       // Fetch document data separately to ensure freshness
-      const { data: dData, error: dataError } = await supabase
-        .from('document_data')
+      const { data: dData, error: dataError } = await (supabase
+        .from('document_data') as any)
         .select('*')
         .eq('document_id', documentId)
         .maybeSingle()
@@ -187,7 +187,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       // Load preview
       const { data: blob, error: storageError } = await supabase.storage
         .from('documents')
-        .download(doc.file_path)
+        .download((doc as any).file_path)
 
       if (!storageError && blob) {
         setPreviewUrl(URL.createObjectURL(blob))
@@ -291,8 +291,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       }
 
       // Use upsert to handle both insert and update scenarios (and race conditions)
-      const { error: dataError } = await supabase
-        .from('document_data')
+      const { error: dataError } = await (supabase
+        .from('document_data') as any)
         .upsert({
           document_id: document.id,
           ...updateData,
@@ -308,24 +308,24 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       if (dataError) throw dataError
 
       // Update document type
-      await supabase
-        .from('documents')
+      await (supabase
+        .from('documents') as any)
         .update({ document_type: formData.document_type })
         .eq('id', document.id)
 
       // Handle Bank Statement Updates
       if (formData.document_type === 'bank_statement') {
         // 1. Find existing statement
-        const { data: existingStatement } = await supabase
-          .from('bank_statements')
+        const { data: existingStatement } = await (supabase
+          .from('bank_statements') as any)
           .select('id')
           .eq('document_id', document.id)
           .maybeSingle()
         
         if (existingStatement) {
           // Update statement details
-          await supabase
-            .from('bank_statements')
+          await (supabase
+            .from('bank_statements') as any)
             .update({
               start_date: formData.statement_period_start || null,
               end_date: formData.statement_period_end || null,
@@ -337,8 +337,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
           // Update transactions (Delete all and re-insert is safest for sync)
           // Ideally we would diff, but for now this ensures consistency with the verified data
-          await supabase
-            .from('bank_transactions')
+          await (supabase
+            .from('bank_transactions') as any)
             .delete()
             .eq('bank_statement_id', existingStatement.id)
             .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
@@ -360,13 +360,13 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
               confidence_score: 1.0 // User verified
             }))
             
-            await supabase.from('bank_transactions').insert(txsToInsert as any)
+            await (supabase.from('bank_transactions') as any).insert(txsToInsert as any)
           }
         }
       } else {
         // Handle Invoice/Receipt Updates (Existing Logic)
-        const { data: transaction } = await supabase
-          .from('transactions')
+        const { data: transaction } = await (supabase
+          .from('transactions') as any)
           .select('id, status')
           .eq('document_id', document.id)
           .single()
@@ -387,8 +387,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           }
 
           // 2. Update transaction details
-          await supabase
-            .from('transactions')
+          await (supabase
+            .from('transactions') as any)
             .update({
               transaction_date: formData.document_date || new Date().toISOString().split('T')[0],
               reference_number: formData.invoice_number || null,
@@ -402,8 +402,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           // In a real app, this is complex because we don't know which line item corresponds to what.
           // For now, we'll fetch line items and update the amounts if there are exactly 2 (simple double entry)
           
-          const { data: lineItems } = await supabase
-            .from('line_items')
+          const { data: lineItems } = await (supabase
+            .from('line_items') as any)
             .select('*')
             .eq('transaction_id', transaction.id)
 
@@ -412,7 +412,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             const baseAmount = Number((amount * exchangeRate).toFixed(2))
             
             // Assuming one is debit and one is credit
-            const updates = lineItems.map(item => {
+            const updates = lineItems.map((item: any) => {
               // Identify if this row was originally the debit or credit side
               // If both are 0 (newly created), assume first is debit
               const isDebit = item.debit > 0 || (item.debit === 0 && item.credit === 0 && item.id === lineItems[0].id)
@@ -435,8 +435,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             })
 
             for (const item of updates) {
-              await supabase
-                .from('line_items')
+              await (supabase
+                .from('line_items') as any)
                 .update({ 
                     debit: item.debit, 
                     credit: item.credit,

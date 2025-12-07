@@ -118,8 +118,8 @@ export function AISettings() {
   }
 
   const fetchProviders = async () => {
-    const { data } = await supabase
-      .from('ai_providers')
+    const { data } = await (supabase
+      .from('ai_providers') as any)
       .select('*')
       .eq('is_active', true)
     
@@ -129,8 +129,8 @@ export function AISettings() {
   const fetchCurrentConfig = async () => {
     if (!currentTenant) return
 
-    const { data } = await supabase
-      .from('tenant_ai_configurations')
+    const { data } = await (supabase
+      .from('tenant_ai_configurations') as any)
       .select('*')
       .eq('tenant_id', currentTenant.id)
       .eq('is_active', true)
@@ -294,8 +294,8 @@ export function AISettings() {
         return
       }
 
-      const { error } = await supabase
-        .from('tenant_ai_configurations')
+      const { error } = await (supabase
+        .from('tenant_ai_configurations') as any)
         .upsert({
           tenant_id: currentTenant.id,
           ai_provider_id: config.providerId,

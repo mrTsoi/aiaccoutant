@@ -40,7 +40,7 @@ export async function importInvoiceToTransactions(invoiceId: string) {
     return { error: 'No active company found to import expenses to.' }
   }
 
-  const tenantId = membership.tenant_id
+  const tenantId = (membership as any).tenant_id
 
   // 3. Check if already imported (optional, but good practice)
   // We can check if a transaction exists with this reference number
@@ -48,7 +48,7 @@ export async function importInvoiceToTransactions(invoiceId: string) {
     .from('transactions')
     .select('id')
     .eq('tenant_id', tenantId)
-    .eq('reference_number', invoice.stripe_invoice_id)
+    .eq('reference_number', (invoice as any).stripe_invoice_id)
     .single()
 
   if (existing) {
@@ -60,13 +60,13 @@ export async function importInvoiceToTransactions(invoiceId: string) {
     .from('transactions')
     .insert({
       tenant_id: tenantId,
-      transaction_date: new Date(invoice.created_at).toISOString().split('T')[0],
-      description: `Subscription Payment (Invoice #${invoice.stripe_invoice_id.slice(-6)})`,
-      reference_number: invoice.stripe_invoice_id,
+      transaction_date: new Date((invoice as any).created_at).toISOString().split('T')[0],
+      description: `Subscription Payment (Invoice #${(invoice as any).stripe_invoice_id.slice(-6)})`,
+      reference_number: (invoice as any).stripe_invoice_id,
       status: 'DRAFT', // Start as draft so they can review
       created_by: user.id,
-      notes: `Imported from Billing History. Amount: $${invoice.amount_paid}`
-    })
+      notes: `Imported from Billing History. Amount: $${(invoice as any).amount_paid}`
+    } as any)
     .select()
     .single()
 
@@ -91,7 +91,7 @@ export async function importInvoiceToTransactions(invoiceId: string) {
     .single()
 
   // Fallback to any expense
-  let expenseAccountId = expenseAccount?.id
+  let expenseAccountId = (expenseAccount as any)?.id
   if (!expenseAccountId) {
     const { data: anyExpense } = await supabase
       .from('chart_of_accounts')
@@ -100,7 +100,7 @@ export async function importInvoiceToTransactions(invoiceId: string) {
       .eq('account_type', 'EXPENSE')
       .limit(1)
       .single()
-    expenseAccountId = anyExpense?.id
+    expenseAccountId = (anyExpense as any)?.id
   }
 
   // Find Bank/Cash account
@@ -113,7 +113,7 @@ export async function importInvoiceToTransactions(invoiceId: string) {
     .limit(1)
     .single()
     
-  let bankAccountId = bankAccount?.id
+  let bankAccountId = (bankAccount as any)?.id
   if (!bankAccountId) {
      const { data: anyAsset } = await supabase
       .from('chart_of_accounts')
@@ -122,28 +122,28 @@ export async function importInvoiceToTransactions(invoiceId: string) {
       .eq('account_type', 'ASSET')
       .limit(1)
       .single()
-    bankAccountId = anyAsset?.id
+    bankAccountId = (anyAsset as any)?.id
   }
 
   if (expenseAccountId && bankAccountId) {
     await supabase.from('line_items').insert([
       {
-        transaction_id: transaction.id,
+        transaction_id: (transaction as any).id,
         account_id: expenseAccountId,
-        debit: invoice.amount_paid,
+        debit: (invoice as any).amount_paid,
         credit: 0,
         description: 'Subscription Expense'
       },
       {
-        transaction_id: transaction.id,
+        transaction_id: (transaction as any).id,
         account_id: bankAccountId,
         debit: 0,
-        credit: invoice.amount_paid,
+        credit: (invoice as any).amount_paid,
         description: 'Payment from Bank'
       }
-    ])
+    ] as any)
   }
 
   revalidatePath('/dashboard/settings/billing')
-  return { success: true, transactionId: transaction.id }
+  return { success: true, transactionId: (transaction as any).id }
 }

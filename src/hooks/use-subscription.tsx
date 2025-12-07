@@ -41,7 +41,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const { data, error } = await supabase.rpc('get_user_subscription_details', {
+      const { data, error } = await (supabase.rpc as any)('get_user_subscription_details', {
         p_user_id: user.id
       })
 

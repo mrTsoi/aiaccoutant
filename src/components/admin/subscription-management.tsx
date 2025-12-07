@@ -53,14 +53,14 @@ export function SubscriptionManagement() {
       }
 
       if (editingPlan) {
-        const { error } = await supabase
-          .from('subscription_plans')
+        const { error } = await (supabase
+          .from('subscription_plans') as any)
           .update(plan)
           .eq('id', editingPlan.id)
         if (error) throw error
       } else {
-        const { error } = await supabase
-          .from('subscription_plans')
+        const { error } = await (supabase
+          .from('subscription_plans') as any)
           .insert(plan as any)
         if (error) throw error
       }
@@ -78,9 +78,10 @@ export function SubscriptionManagement() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure? This might affect users on this plan.')) return
     try {
-      const { error } = await supabase
-        .from('subscription_plans')
+      const { error } = await (supabase
+        .from('subscription_plans') as any)
         .delete()
+        .eq('id', id)
       if (error) throw error
       fetchPlans()
       toast.success('Plan deleted successfully')
@@ -88,7 +89,6 @@ export function SubscriptionManagement() {
       console.error('Error deleting plan:', error)
       toast.error('Failed to delete plan: ' + error.message)
     }
-  } }
   }
 
   if (loading) {

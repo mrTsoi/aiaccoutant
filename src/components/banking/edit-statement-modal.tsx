@@ -69,8 +69,8 @@ export function EditStatementModal({ statement, isOpen, onClose, onSaved }: Prop
   const handleSave = async () => {
     try {
       setSaving(true)
-      const { error } = await supabase
-        .from('bank_statements')
+      const { error } = await (supabase
+        .from('bank_statements') as any)
         .update({
           start_date: formData.start_date || null,
           end_date: formData.end_date || null,

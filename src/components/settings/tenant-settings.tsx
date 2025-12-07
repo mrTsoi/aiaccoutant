@@ -43,8 +43,8 @@ export function TenantSettings() {
 
     try {
       setLoading(true)
-      const { error } = await supabase
-        .from('tenants')
+      const { error } = await (supabase
+        .from('tenants') as any)
         .update({
           name: formData.name,
           locale: formData.locale,

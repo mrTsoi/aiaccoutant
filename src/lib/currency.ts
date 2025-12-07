@@ -21,8 +21,8 @@ export async function getExchangeRate(from: string, to: string, tenantId?: strin
     const supabase = createClient()
     
     // Fetch tenant base currency
-    const { data: tenant } = await supabase
-      .from('tenants')
+    const { data: tenant } = await (supabase
+      .from('tenants') as any)
       .select('currency')
       .eq('id', tenantId)
       .single()
@@ -37,8 +37,8 @@ export async function getExchangeRate(from: string, to: string, tenantId?: strin
       const getRateToBase = async (currency: string): Promise<number | null> => {
         if (currency === base) return 1.0
         
-        const { data } = await supabase
-          .from('exchange_rates')
+        const { data } = await (supabase
+          .from('exchange_rates') as any)
           .select('rate')
           .eq('tenant_id', tenantId)
           .eq('currency', currency)

@@ -70,8 +70,8 @@ export function UserManagement() {
 
   const handleAssignUser = async (userId: string, tenantId: string, role: string) => {
     try {
-      const { error } = await supabase
-        .from('memberships')
+      const { error } = await (supabase
+        .from('memberships') as any)
         .upsert({
           user_id: userId,
           tenant_id: tenantId,
@@ -94,8 +94,8 @@ export function UserManagement() {
     if (!confirm('Are you sure you want to remove access to this tenant?')) return
 
     try {
-      const { error } = await supabase
-        .from('memberships')
+      const { error } = await (supabase
+        .from('memberships') as any)
         .delete()
         .match({ user_id: userId, tenant_id: tenantId })
 

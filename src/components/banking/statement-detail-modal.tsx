@@ -88,7 +88,7 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
         const { data: dbTxs, error: txError } = await supabase
           .from('bank_transactions')
           .select('*')
-          .eq('bank_statement_id', statement.id)
+          .eq('bank_statement_id', (statement as any).id)
           .order('transaction_date', { ascending: false })
 
         if (txError) {
@@ -106,8 +106,8 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
             .eq('document_id', documentId)
             .maybeSingle()
          
-         if (!docDataError && docData?.extracted_data?.bank_transactions) {
-             setTransactions(docData.extracted_data.bank_transactions.map((t: any, i: number) => ({
+         if (!docDataError && (docData as any)?.extracted_data?.bank_transactions) {
+             setTransactions((docData as any).extracted_data.bank_transactions.map((t: any, i: number) => ({
                  id: `temp-${i}`,
                  transaction_date: t.date,
                  description: t.description,
@@ -121,10 +121,10 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
       }
 
       // 3. Load Preview
-      if (doc?.file_path) {
+      if ((doc as any)?.file_path) {
         const { data: blob, error: storageError } = await supabase.storage
           .from('documents')
-          .download(doc.file_path)
+          .download((doc as any).file_path)
 
         if (storageError) {
           console.error('Error downloading preview:', storageError)
@@ -151,8 +151,8 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
       const newTxs = transactions.filter(t => t.id?.toString().startsWith('temp-'))
 
       for (const tx of updates) {
-        const { error } = await supabase
-          .from('bank_transactions')
+        const { error } = await (supabase
+          .from('bank_transactions') as any)
           .update({
             transaction_date: tx.transaction_date,
             description: tx.description,
@@ -172,7 +172,7 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
           // If not, we need to find it or create it?
           // In fetchDetails, we tried to find it.
           
-          let statementId = null
+          let statementId: string | null = null
           const { data: statement } = await supabase
             .from('bank_statements')
             .select('id, bank_account_id, tenant_id')
@@ -180,11 +180,11 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
             .maybeSingle()
             
           if (statement) {
-              statementId = statement.id
+              statementId = (statement as any).id
               
               const toInsert = newTxs.map(tx => ({
                   bank_statement_id: statementId,
-                  tenant_id: statement.tenant_id,
+                  tenant_id: (statement as any).tenant_id,
                   transaction_date: tx.transaction_date,
                   description: tx.description,
                   amount: tx.amount,
@@ -193,8 +193,8 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
                   raw_data: { source: 'manual_entry' }
               }))
               
-              const { error: insertError } = await supabase
-                .from('bank_transactions')
+              const { error: insertError } = await (supabase
+                .from('bank_transactions') as any)
                 .insert(toInsert)
                 
               if (insertError) throw insertError
@@ -214,7 +214,7 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
 
       if (currentData) {
           const updatedExtracted = {
-              ...currentData.extracted_data,
+              ...(currentData as any).extracted_data,
               bank_transactions: transactions.map(t => ({
                   date: t.transaction_date,
                   description: t.description,
@@ -223,8 +223,8 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
               }))
           }
 
-          await supabase
-            .from('document_data')
+          await (supabase
+            .from('document_data') as any)
             .update({
                 extracted_data: updatedExtracted,
                 metadata: { verified_by_user: true }
@@ -269,7 +269,7 @@ export function StatementDetailModal({ documentId, onClose, onSaved }: Props) {
           if (!confirm('Delete this transaction permanently?')) return
           
           try {
-              await supabase.from('bank_transactions').delete().eq('id', tx.id)
+              await (supabase.from('bank_transactions') as any).delete().eq('id', tx.id)
           } catch (e) {
               console.error(e)
               toast.error('Failed to delete')

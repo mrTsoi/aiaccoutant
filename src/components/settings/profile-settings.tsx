@@ -29,8 +29,8 @@ export function ProfileSettings() {
         setUserId(user.id)
         setEmail(user.email || "")
         
-        const { data, error } = await supabase
-          .from('profiles')
+        const { data, error } = await (supabase
+          .from('profiles') as any)
           .select('full_name')
           .eq('id', user.id)
           .single()
@@ -40,7 +40,7 @@ export function ProfileSettings() {
         }
 
         if (data) {
-          setFullName(data.full_name || "")
+          setFullName((data as any).full_name || "")
         }
       }
     } catch (error) {
@@ -55,8 +55,8 @@ export function ProfileSettings() {
       setLoading(true)
       if (!userId) return
 
-      const { error } = await supabase
-        .from('profiles')
+      const { error } = await (supabase
+        .from('profiles') as any)
         .upsert({
           id: userId,
           full_name: fullName,

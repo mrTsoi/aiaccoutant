@@ -100,8 +100,8 @@ export function BankStatementList({ accountId }: Props) {
     if (!confirm('Are you sure you want to delete this statement? This will also delete all associated transactions.')) return
 
     try {
-      const { error } = await supabase
-        .from('bank_statements')
+      const { error } = await (supabase
+        .from('bank_statements') as any)
         .delete()
         .eq('id', id)
 
@@ -126,8 +126,8 @@ export function BankStatementList({ accountId }: Props) {
       toast.info('Starting reprocessing...')
 
       // 1. Reset status to IMPORTED (valid enum value)
-      const { error } = await supabase
-        .from('bank_statements')
+      const { error } = await (supabase
+        .from('bank_statements') as any)
         .update({ status: 'IMPORTED' }) 
         .eq('id', id)
 

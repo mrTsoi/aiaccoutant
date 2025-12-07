@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       .from('memberships')
       .select('*')
       .eq('user_id', user.id)
-      .eq('tenant_id', document.tenant_id)
+      .eq('tenant_id', (document as any).tenant_id)
       .eq('is_active', true)
       .single()
 

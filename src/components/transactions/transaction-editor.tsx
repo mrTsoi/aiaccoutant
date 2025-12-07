@@ -152,8 +152,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
   const fetchTransaction = useCallback(async () => {
     try {
       // 1. Fetch Transaction
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
+      const { data: txData, error: txError } = await (supabase
+        .from('transactions') as any)
         .select('*')
         .eq('id', transactionId)
         .single()
@@ -161,8 +161,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
       if (txError) throw txError
 
       // 2. Fetch Line Items
-      const { data: lineData, error: lineError } = await supabase
-        .from('line_items')
+      const { data: lineData, error: lineError } = await (supabase
+        .from('line_items') as any)
         .select('*')
         .eq('transaction_id', transactionId)
 
@@ -170,11 +170,11 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
 
       // 2.5 Fetch Document Data (Fallback for currency)
       let extractedCurrency = null
-      if (txData.document_id) {
-        const { data: docData } = await supabase
-          .from('document_data')
+      if ((txData as any).document_id) {
+        const { data: docData } = await (supabase
+          .from('document_data') as any)
           .select('currency')
-          .eq('document_id', txData.document_id)
+          .eq('document_id', (txData as any).document_id)
           .maybeSingle()
         if (docData?.currency) extractedCurrency = docData.currency
       }
@@ -187,8 +187,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
          if ((currentTenant as any).currency) {
             currentTenantCurrency = (currentTenant as any).currency
          } else {
-             const { data: tenantData } = await supabase
-               .from('tenants')
+             const { data: tenantData } = await (supabase
+               .from('tenants') as any)
                .select('currency')
                .eq('id', currentTenant.id)
                .single()
@@ -225,7 +225,7 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
         }
       }
 
-      const processedLines = (lineData || []).map(line => {
+      const processedLines = (lineData || []).map((line: any) => {
         if (isForeign) {
            const hasForeign = line.debit_foreign || line.credit_foreign
            if (!hasForeign) {
@@ -254,21 +254,21 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
       })
 
       // Fetch document preview if exists
-      if (txData.document_id) {
-        const { data: doc, error: docError } = await supabase
-          .from('documents')
+      if ((txData as any).document_id) {
+        const { data: doc, error: docError } = await (supabase
+          .from('documents') as any)
           .select('file_path, file_type')
-          .eq('id', txData.document_id)
+          .eq('id', (txData as any).document_id)
           .single()
         
         if (doc && !docError) {
            const { data: blob } = await supabase.storage
             .from('documents')
-            .download(doc.file_path)
+            .download((doc as any).file_path)
            
            if (blob) {
              setPreviewUrl(URL.createObjectURL(blob))
-             setFileType(doc.file_type)
+             setFileType((doc as any).file_type)
            }
         }
       }
@@ -307,8 +307,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
         setTenantCurrency((currentTenant as any).currency)
       } else {
         // Fallback fetch if not in context yet
-        supabase.from('tenants').select('currency').eq('id', currentTenant.id).single()
-          .then(({ data }) => {
+        (supabase.from('tenants') as any).select('currency').eq('id', currentTenant.id).single()
+          .then(({ data }: any) => {
             if (data?.currency) setTenantCurrency(data.currency)
           })
       }
@@ -484,8 +484,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
       setSaving(true)
       
       // Create a new line item in DB
-      const { data: newLine, error } = await supabase
-        .from('line_items')
+      const { data: newLine, error } = await (supabase
+        .from('line_items') as any)
         .insert({
           transaction_id: transaction.id,
           account_id: accounts[0]?.id, // Default to first account or null
@@ -524,8 +524,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
       setSaving(true)
 
       // Update transaction
-      const { error: txError } = await supabase
-        .from('transactions')
+      const { error: txError } = await (supabase
+        .from('transactions') as any)
         .update({
           transaction_date: transaction.transaction_date,
           description: transaction.description,
@@ -540,8 +540,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
 
       // Update line items
       for (const line of transaction.line_items) {
-        const { error: lineError } = await supabase
-          .from('line_items')
+        const { error: lineError } = await (supabase
+          .from('line_items') as any)
           .update({
             account_id: line.account_id,
             debit: line.debit,
@@ -586,8 +586,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
 
       const { data: { user } } = await supabase.auth.getUser()
 
-      const { error } = await supabase
-        .from('transactions')
+      const { error } = await (supabase
+        .from('transactions') as any)
         .update({
           status: 'POSTED',
           posted_by: user?.id || null,

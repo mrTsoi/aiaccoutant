@@ -59,14 +59,14 @@ export function PromoCodeManagement() {
   const handleSave = async (code: Partial<PromoCode>) => {
     try {
       if (editingCode) {
-        const { error } = await supabase
-          .from('promo_codes')
+        const { error } = await (supabase
+          .from('promo_codes') as any)
           .update(code)
           .eq('id', editingCode.id)
         if (error) throw error
       } else {
-        const { error } = await supabase
-          .from('promo_codes')
+        const { error } = await (supabase
+          .from('promo_codes') as any)
           .insert(code as any)
         if (error) throw error
       }
@@ -84,9 +84,10 @@ export function PromoCodeManagement() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this promo code?')) return
     try {
-      const { error } = await supabase
-        .from('promo_codes')
+      const { error } = await (supabase
+        .from('promo_codes') as any)
         .delete()
+        .eq('id', id)
       if (error) throw error
       fetchCodes()
       toast.success('Promo code deleted successfully')
@@ -94,7 +95,6 @@ export function PromoCodeManagement() {
       console.error('Error deleting promo code:', error)
       toast.error('Failed to delete promo code: ' + error.message)
     }
-  } }
   }
 
   if (loading) {

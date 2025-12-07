@@ -34,7 +34,7 @@ export function BalanceSheetReport() {
     try {
       setLoading(true)
 
-      const { data: reportData, error } = await supabase.rpc('get_balance_sheet', {
+      const { data: reportData, error } = await (supabase.rpc as any)('get_balance_sheet', {
         p_tenant_id: currentTenant.id,
         p_as_of_date: asOfDate
       })

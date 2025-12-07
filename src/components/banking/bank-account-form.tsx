@@ -83,14 +83,14 @@ export function BankAccountForm({ onClose, onSaved, initialData }: Props) {
 
       let error
       if (initialData?.id) {
-        const { error: updateError } = await supabase
-          .from('bank_accounts')
+        const { error: updateError } = await (supabase
+          .from('bank_accounts') as any)
           .update(dataToSave)
           .eq('id', initialData.id)
         error = updateError
       } else {
-        const { error: insertError } = await supabase
-          .from('bank_accounts')
+        const { error: insertError } = await (supabase
+          .from('bank_accounts') as any)
           .insert(dataToSave)
         error = insertError
       }

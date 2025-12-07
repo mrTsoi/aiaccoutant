@@ -128,8 +128,8 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
       const documentType = isBankStatement ? 'bank_statement' : null
 
       // Create document record
-      const { error: dbError } = await supabase
-        .from('documents')
+      const { error: dbError } = await (supabase
+        .from('documents') as any)
         .insert({
           id: documentId,
           tenant_id: currentTenant.id,
@@ -150,8 +150,8 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
 
       // If bank account selected, create bank_statement record immediately
       if (isBankStatement) {
-        await supabase
-          .from('bank_statements')
+        await (supabase
+          .from('bank_statements') as any)
           .insert({
             tenant_id: currentTenant.id,
             bank_account_id: selectedBankAccountId,
