@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -9,42 +9,63 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+type Plan = { id: string; name: string; description: string; price_monthly: number; price_yearly?: number; yearly_discount_percent?: number }
+
 export default function SignupForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [planId, setPlanId] = useState('')
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [interval, setInterval] = useState<'month' | 'year'>('month')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
+  useEffect(() => {
+    // Fetch plans from Supabase
+    (async () => {
+      const { data, error } = await supabase.from('subscription_plans').select('*').eq('is_active', true).order('price_monthly', { ascending: true })
+      if (!error && data) setPlans(data)
+    })()
+  }, [supabase])
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
+    if (!planId) {
+      setError('Please select a subscription plan.')
+      setLoading(false)
+      return
+    }
+
     try {
-      const { error } = await supabase.auth.signUp({
+      // 1. Register user
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName,
+            selected_plan_id: planId,
+            selected_plan_interval: interval,
           },
         },
       })
 
-      if (error) {
-        setError(error.message)
-      } else {
-        setSuccess(true)
-        // Redirect to login or dashboard after successful signup
-        setTimeout(() => {
-          router.push('/dashboard')
-          router.refresh()
-        }, 2000)
+      if (signUpError) {
+        setError(signUpError.message)
+        setLoading(false)
+        return
       }
+
+      setSuccess(true)
+      // Show confirmation message and prompt user to check email
     } catch (err) {
       setError('An unexpected error occurred')
     } finally {
@@ -70,7 +91,8 @@ export default function SignupForm() {
             )}
             {success && (
               <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md">
-                Account created successfully! Redirecting...
+                Account created! Please check your email to confirm your address before logging in.<br />
+                After confirming, log in to complete your subscription payment if required.
               </div>
             )}
             <div className="space-y-2">
@@ -84,6 +106,49 @@ export default function SignupForm() {
                 required
                 disabled={loading}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="plan">Subscription Plan</Label>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className={`px-3 py-1 rounded border text-xs font-medium transition-colors ${interval === 'month' ? 'bg-primary text-white border-primary' : 'bg-white text-primary border-gray-300 hover:bg-gray-50'}`}
+                    onClick={() => setInterval('month')}
+                    disabled={loading}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-3 py-1 rounded border text-xs font-medium transition-colors ${interval === 'year' ? 'bg-primary text-white border-primary' : 'bg-white text-primary border-gray-300 hover:bg-gray-50'}`}
+                    onClick={() => setInterval('year')}
+                    disabled={loading}
+                  >
+                    Yearly
+                  </button>
+                </div>
+                <Select value={planId} onValueChange={setPlanId} disabled={loading || plans.length === 0}>
+                  <SelectTrigger id="plan" className="truncate">
+                    <SelectValue placeholder="Select a plan" className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id} className="truncate">
+                        <div className="flex flex-col w-56 truncate">
+                          <span className="font-medium truncate">{plan.name}</span>
+                          {interval === 'month' ? (
+                            <span className="text-xs text-muted-foreground truncate">${plan.price_monthly}/mo</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground truncate">${plan.price_yearly} /yr {plan.yearly_discount_percent ? `(${plan.yearly_discount_percent}% off)` : ''}</span>
+                          )}
+                          <span className="text-xs text-muted-foreground truncate">{plan.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

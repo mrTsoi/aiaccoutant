@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useTenant } from '@/hooks/use-tenant'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,7 +29,45 @@ interface ActivityItem {
 
 export default function DashboardPage() {
   const { currentTenant } = useTenant()
-  const { subscription } = useSubscription()
+  const { subscription, loading: subLoading, refreshSubscription } = useSubscription()
+    // Payment Modal State
+    const [showPaymentModal, setShowPaymentModal] = useState(false)
+    const [checkoutLoading, setCheckoutLoading] = useState(false)
+    const [checkoutError, setCheckoutError] = useState<string | null>(null)
+
+    // Show modal if subscription is not active or trialing
+    useEffect(() => {
+      if (!subLoading && subscription && !['active', 'trialing'].includes(subscription.status)) {
+        setShowPaymentModal(true)
+      } else {
+        setShowPaymentModal(false)
+      }
+    }, [subscription, subLoading])
+
+    // Stripe Checkout Handler
+    const handleCheckout = async () => {
+      setCheckoutLoading(true)
+      setCheckoutError(null)
+      try {
+        const res = await fetch('/api/stripe/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan_name: subscription?.plan_name || 'free',
+            interval: subscription?.current_period_end && subscription?.current_period_start ?
+              (new Date(subscription.current_period_end).getFullYear() - new Date(subscription.current_period_start).getFullYear() >= 1 ? 'year' : 'month') : 'month',
+            returnUrl: window.location.origin + '/dashboard',
+          }),
+        })
+        if (!res.ok) throw new Error(await res.text())
+        const { url } = await res.json()
+        window.location.href = url
+      } catch (err: any) {
+        setCheckoutError(err.message || 'Failed to start checkout')
+      } finally {
+        setCheckoutLoading(false)
+      }
+    }
   const supabase = useMemo(() => createClient(), [])
   const tenantId = currentTenant?.id
   const [stats, setStats] = useState<DashboardStats>({
@@ -156,8 +196,38 @@ export default function DashboardPage() {
     return <Clock className="w-4 h-4 text-yellow-500" />
   }
 
+  
   return (
-    <div className="space-y-4">
+    <>
+      {/* Payment Required Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Subscription Required</DialogTitle>
+            <DialogDescription>
+              {subLoading ? 'Checking your subscription...' : (
+                <div>
+                  {subscription?.plan_name ? (
+                    <>
+                      <div className="mb-2">Your current plan: <b>{subscription.plan_name}</b></div>
+                      <div className="mb-2">Status: <span className="capitalize">{subscription.status}</span></div>
+                    </>
+                  ) : (
+                    <div className="mb-2">No active subscription found.</div>
+                  )}
+                  <div className="mb-4 text-red-600 font-medium">You must complete payment to access the dashboard.</div>
+                  {checkoutError && <div className="mb-2 text-red-500 text-sm">{checkoutError}</div>}
+                  <Button onClick={handleCheckout} disabled={checkoutLoading} className="w-full">
+                    {checkoutLoading ? 'Redirecting to Payment...' : 'Complete Payment'}
+                  </Button>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+      {/* Main Dashboard */}
+      <div className="space-y-4" aria-hidden={showPaymentModal} style={showPaymentModal ? { filter: 'blur(2px)', pointerEvents: 'none', userSelect: 'none' } : {}}>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat, index) => (
@@ -174,8 +244,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
+        </div>
       {/* Quick Actions */}
       <Card>
         <CardHeader>
@@ -282,5 +351,6 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }
