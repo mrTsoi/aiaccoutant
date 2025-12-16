@@ -18,17 +18,21 @@ vi.mock('@/lib/stripe', () => ({
       }))
     },
     webhooks: {
-      constructEvent: vi.fn((_b: any, _s: any, _sec: any) => ({
-        type: 'invoice.payment_succeeded',
-        data: {
-          object: {
-            id: 'inv_1',
-            subscription: 'sub_123',
-            customer: 'cus_123',
-            lines: { data: [{ description: 'Subscription', period: { start: 1700000000, end: 1702592000 } }] }
+        constructEvent: vi.fn((_b: any, _s: any, _sec: any) => ({
+          type: 'invoice.payment_succeeded',
+          data: {
+            object: {
+              id: 'inv_1',
+              subscription: 'sub_123',
+              customer: 'cus_123',
+              amount_paid: 2000,
+              currency: 'usd',
+              invoice_pdf: 'url',
+              created: 1700000000,
+              lines: { data: [{ description: 'Subscription', period: { start: 1700000000, end: 1702592000 } }] }
+            }
           }
-        }
-      }))
+        }))
     }
   })),
   getStripeConfig: vi.fn(() => ({ webhook_secret: 'whsec' }))

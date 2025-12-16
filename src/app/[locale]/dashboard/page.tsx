@@ -128,15 +128,19 @@ export default function DashboardPage() {
         supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId)
       ])
 
-      // 2. Fetch Revenue
-          const { rpc } = await import('@/lib/supabase/typed')
-          const { data: plDataRaw } = await rpc('get_profit_loss', {
-        p_tenant_id: tenantId,
-        p_start_date: startDate,
-        p_end_date: endDate
-      })
-      
-      const plData = plDataRaw as Array<{ account_type?: string; amount?: number }> | null
+      // 2. Fetch Revenue (server-side RPC via secure API)
+      let plData: Array<{ account_type?: string; amount?: number }> | null = null
+      try {
+        const res = await fetch(`/api/dashboard/profit-loss?p_tenant_id=${encodeURIComponent(tenantId)}&p_start_date=${encodeURIComponent(startDate)}&p_end_date=${encodeURIComponent(endDate)}`)
+        if (res.ok) {
+          const json = await res.json()
+          plData = json?.data as Array<{ account_type?: string; amount?: number }> | null
+        } else {
+          plData = null
+        }
+      } catch (e) {
+        plData = null
+      }
 
       const revenue = plData 
         ? plData.filter((row) => row.account_type === 'REVENUE').reduce((sum: number, row) => sum + (row.amount || 0), 0)

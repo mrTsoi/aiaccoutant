@@ -248,7 +248,7 @@ export async function POST(req: Request) {
         // Let's fetch the current plan from DB to compare? No, too expensive.
         // Let's just update the core fields.
         
-        await (createService() as any)
+        await createService()
           .from('user_subscriptions')
           .update(updateData)
           .eq('stripe_subscription_id', subscription.id)

@@ -14,8 +14,9 @@ export async function getUserSubscriptionFeatures(
     throw new Error(rpcRes.error.message || 'Failed to load subscription details')
   }
 
-  const first = (rpcRes.data as any[])?.[0]
-  return (first?.features as Record<string, any>) || {}
+  const dataArray = Array.isArray(rpcRes.data) ? rpcRes.data : undefined
+  const first = dataArray ? (dataArray[0] as { features?: Record<string, any> } | undefined) : undefined
+  return first?.features || {}
 }
 
 export async function userHasFeature(

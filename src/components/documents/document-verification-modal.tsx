@@ -66,7 +66,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
   const [lastZoomLevel, setLastZoomLevel] = useState(100)
 
   const { currentTenant } = useTenant()
-  const supabase = useMemo(() => createClient() as any, [])
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     return () => {
@@ -77,7 +77,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
   const fetchDocumentDetails = useCallback(async () => {
     try {
       setLoading(true)
-      
+
       // Fetch document
       const { data: doc, error: docError } = await supabase
         .from('documents')
@@ -88,7 +88,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       if (docError) throw docError
       setDocument(doc)
 
-      // Fetch document data separately to ensure freshness
+      // Fetch document data separately
       const { data: dData, error: dataError } = await supabase
         .from('document_data')
         .select('*')
@@ -97,41 +97,28 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
       if (dataError) throw dataError
 
-      // Load preview
+      // Load preview from storage
       const { data: blob, error: storageError } = await supabase.storage
         .from('documents')
         .download(doc!.file_path)
 
-      if (!storageError && blob) {
-        setPreviewUrl(URL.createObjectURL(blob))
-      }
+      if (!storageError && blob) setPreviewUrl(URL.createObjectURL(blob))
 
-      // Helper to safely format dates
       const formatDate = (dateStr: string | null | undefined) => {
         if (!dateStr) return ''
         const cleanStr = dateStr.trim()
-        
-        // 1. YYYY-MM-DD
         if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) return cleanStr
-        
-        // 2. YYYY-MM-DDTHH:mm:ss... (ISO)
         if (/^\d{4}-\d{2}-\d{2}T/.test(cleanStr)) return cleanStr.split('T')[0]
-        
-        // 3. Try parsing as date
         const d = new Date(cleanStr)
         if (isNaN(d.getTime())) return ''
-        
-        // 4. Use local time components
         const year = d.getFullYear()
         const month = String(d.getMonth() + 1).padStart(2, '0')
         const day = String(d.getDate()).padStart(2, '0')
         return `${year}-${month}-${day}`
       }
 
-      // Set form data if exists
       if (dData) {
         setDocData(dData)
-        
         const extracted = (dData.extracted_data as unknown as Record<string, any>) || {}
         const rawDate = dData.document_date ?? extracted.document_date
 
@@ -143,7 +130,6 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           invoice_number: extracted.invoice_number ?? '',
           document_type: doc!.document_type ?? extracted.document_type ?? 'invoice',
           transaction_type: extracted.transaction_type ?? 'expense',
-          // Bank Statement Fields
           statement_period_start: extracted.statement_period_start || '',
           statement_period_end: extracted.statement_period_end || '',
           opening_balance: extracted.opening_balance?.toString() || '',
@@ -152,7 +138,6 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           account_number: extracted.account_number || ''
         })
 
-        // Bank transactions
         if (extracted.bank_transactions && Array.isArray(extracted.bank_transactions)) {
           setBankTransactions(extracted.bank_transactions.map((t: unknown) => {
             const tx = t as Record<string, any>
@@ -329,11 +314,16 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
           // Update transactions (Delete all and re-insert is safest for sync)
           // Ideally we would diff, but for now this ensures consistency with the verified data
-          await supabase
-            .from('bank_transactions')
-            .delete()
-            .eq('bank_statement_id', existingStatement.id)
-            .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
+            await supabase
+              .from('bank_transactions')
+              .delete()
+              .eq('bank_statement_id', existingStatement.id)
+              .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
+            await supabase
+              .from('bank_transactions')
+              .delete()
+              .eq('bank_statement_id', existingStatement.id)
+              .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
             // Actually, if user is verifying the document, they are defining the source of truth.
             // If some were already matched, deleting them might break links.
             // For now, let's assume this is done BEFORE matching.
@@ -373,7 +363,12 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           
           if (docCurrency !== tenantCurrency) {
              try {
-               exchangeRate = await getExchangeRate(docCurrency, tenantCurrency, currentTenant?.id)
+               const { rate: fetched, ok } = await getExchangeRate(docCurrency, tenantCurrency, currentTenant?.id)
+               if (ok) {
+                 exchangeRate = fetched
+               } else {
+                 console.error('Failed to fetch exchange rate, falling back to 1.0')
+               }
              } catch (e) {
                console.error('Failed to fetch rate', e)
              }
@@ -395,10 +390,10 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           // In a real app, this is complex because we don't know which line item corresponds to what.
           // For now, we'll fetch line items and update the amounts if there are exactly 2 (simple double entry)
           
-          const { data: lineItems } = await supabase
-            .from('line_items')
-            .select('*')
-            .eq('transaction_id', transaction.id)
+              const { data: lineItems } = await supabase
+                .from('line_items')
+                .select('*')
+                .eq('transaction_id', transaction.id)
 
           if (lineItems && lineItems.length === 2) {
             const amount = parseFloat(formData.total_amount) || 0
@@ -428,13 +423,13 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             })
 
             for (const item of updates) {
-              await supabase
-                .from('line_items')
+              await (supabase
+                .from('line_items') as any)
                 .update({ 
-                    debit: item.debit, 
-                    credit: item.credit,
-                    debit_foreign: item.debit_foreign,
-                    credit_foreign: item.credit_foreign
+                  debit: item.debit, 
+                  credit: item.credit,
+                  debit_foreign: item.debit_foreign,
+                  credit_foreign: item.credit_foreign
                 })
                 .eq('id', item.id)
             }

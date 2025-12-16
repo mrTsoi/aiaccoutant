@@ -33,7 +33,7 @@ export function StatementVerificationModal({ isOpen, onClose, accountId }: Props
   const [loading, setLoading] = useState(true)
   const [viewDocumentId, setViewDocumentId] = useState<string | null>(null)
   
-  const supabase = useMemo(() => createClient() as any, [])
+  const supabase = useMemo((): import('@supabase/supabase-js').SupabaseClient<import('@/types/database.types').Database> => createClient(), [])
 
   const fetchData = useCallback(async () => {
     try {

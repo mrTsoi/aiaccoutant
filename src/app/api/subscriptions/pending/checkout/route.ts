@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       .limit(1)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    const pending = Array.isArray(data) && data.length > 0 ? (data as any)[0] : null
+    const pending = Array.isArray(data) && data.length > 0 ? data[0] : null
     if (!pending) return NextResponse.json({ error: 'invalid token' }, { status: 404 })
     if (new Date(pending.expires_at) < new Date()) return NextResponse.json({ error: 'token expired' }, { status: 410 })
 
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
         .select('*')
         .eq('id', pending.plan_id)
         .limit(1)
-      const plan = Array.isArray(planRows) && planRows.length > 0 ? (planRows as any)[0] : null
+      const plan = Array.isArray(planRows) && planRows.length > 0 ? planRows[0] : null
       if (plan) {
         productName = plan.name || productName
         unitAmount = interval === 'year' ? (plan.price_yearly || plan.price_monthly * 12) : plan.price_monthly

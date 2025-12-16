@@ -135,7 +135,7 @@ export async function POST(req: Request) {
     updated_at: now,
   }))
 
-  const { error: upsertError } = await (service.from('tenant_settings') as any).upsert(rows, {
+  const { error: upsertError } = await service.from('tenant_settings').upsert(rows, {
     onConflict: 'tenant_id,setting_key',
   })
 

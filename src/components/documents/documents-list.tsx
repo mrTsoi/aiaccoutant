@@ -60,7 +60,7 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
 
   const { currentTenant } = useTenant()
   const { batchSize } = useBatchConfig()
-  const supabase = useMemo(() => createClient() as any, [])
+  const supabase = useMemo((): import('@supabase/supabase-js').SupabaseClient<Database> => createClient(), [])
 
   const fetchDocuments = useCallback(async () => {
     if (!currentTenant) return

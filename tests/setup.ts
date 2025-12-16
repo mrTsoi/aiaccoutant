@@ -5,3 +5,6 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANO
 
 // Provide a default Stripe webhook secret if tests need it
 process.env.STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test'
+
+import React from 'react'
+;(globalThis as any).React = React

@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       .limit(1)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    const row = (data && (data as any)[0]) || null
+    const row = (data && data[0]) || null
     if (!row) return NextResponse.json({ pending: null })
 
     // Return pending, include token so client can resume checkout

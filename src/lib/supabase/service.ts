@@ -1,5 +1,8 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { Database } from '@/types/database.types'
+
+// Temporarily use untyped service client to avoid widespread
+// `never`-typed PostgREST overloads while incremental DB typings
+// are in-progress.
 
 // WARNING: This client bypasses Row Level Security (RLS)
 // Only use in secure server-side contexts (API routes, server actions)
@@ -11,7 +14,7 @@ export function createServiceClient() {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set')
   }
 
-  return createSupabaseClient<Database>(
+  return createSupabaseClient<any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     serviceKey,
     {

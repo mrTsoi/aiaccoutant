@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useTenant } from '@/hooks/use-tenant'
 import { useBatchConfig, chunkArray } from '@/hooks/use-batch-config'
 import { createClient } from '@/lib/supabase/client'
+import type { Database } from '@/types/database.types'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Upload, X, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
@@ -45,11 +47,11 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [selectedBankAccountId, setSelectedBankAccountId] = useState<string>('none')
-  const [bankAccounts, setBankAccounts] = useState<import('@/types/database.types').Database['public']['Tables']['bank_accounts']['Row'][]>([])
+  const [bankAccounts, setBankAccounts] = useState<Partial<import('@/types/database.types').Database['public']['Tables']['bank_accounts']['Row']>[]>([])
   const { currentTenant } = useTenant()
   const { batchSize } = useBatchConfig()
   const router = useRouter()
-  const supabase = useMemo(() => createClient() as any, [])
+  const supabase = useMemo(() => createClient(), [])
   const tenantId = currentTenant?.id
 
   const fetchBankAccounts = useCallback(async () => {
@@ -131,8 +133,8 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
       const documentType = isBankStatement ? 'bank_statement' : null
 
       // Create document record
-      const { error: dbError } = await supabase
-        .from('documents')
+      const { error: dbError } = await (supabase
+        .from('documents') as any)
         .insert({
           id: documentId,
           tenant_id: currentTenant.id,
@@ -153,8 +155,8 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
 
       // If bank account selected, create bank_statement record immediately
       if (isBankStatement) {
-        await supabase
-          .from('bank_statements')
+        await (supabase
+          .from('bank_statements') as any)
           .insert({
             tenant_id: currentTenant.id,
             bank_account_id: selectedBankAccountId,
