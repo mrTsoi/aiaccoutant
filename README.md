@@ -508,6 +508,33 @@ npm run start        # Start production server
 npm run lint         # Run ESLint
 \`\`\`
 
+## 🔄 GitHub Actions Workflow
+
+This project uses GitHub Actions for continuous integration:
+
+- **Automatic Runs**: Workflow runs on push to `main`/`develop` and on pull requests
+- **Manual Runs**: Can be triggered manually via the Actions tab
+- **Steps**: Linting, type checking, and building the application
+
+### How to Rerun a Workflow
+
+1. **Via GitHub UI**: 
+   - Go to the "Actions" tab
+   - Select the workflow run
+   - Click "Re-run jobs"
+
+2. **Manual Trigger**:
+   - Go to "Actions" tab
+   - Select "CI" workflow
+   - Click "Run workflow"
+
+3. **Using GitHub CLI**:
+   \`\`\`bash
+   gh run rerun <run-id>
+   \`\`\`
+
+For detailed instructions, see [.github/WORKFLOW_GUIDE.md](.github/WORKFLOW_GUIDE.md)
+
 ## 🔒 Security Best Practices
 
 1. **Never commit \`.env.local\`** - Contains sensitive credentials
