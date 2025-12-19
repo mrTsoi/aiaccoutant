@@ -50,8 +50,11 @@ test('signup -> subscription -> checkout.session.completed webhook (signed)', as
   }
 
   const payload = JSON.stringify(event)
-  // Use test webhook secret from node env (set in playwright.config webServer.env)
-  const secret = process.env.STRIPE_CONFIG_JSON ? JSON.parse(process.env.STRIPE_CONFIG_JSON).webhook_secret : 'whsec_test'
+  // Prefer explicit env var (loaded from .env.local by playwright.config.ts),
+  // then STRIPE_CONFIG_JSON for backward compatibility.
+  const secret =
+    process.env.STRIPE_WEBHOOK_SECRET ||
+    (process.env.STRIPE_CONFIG_JSON ? JSON.parse(process.env.STRIPE_CONFIG_JSON).webhook_secret : 'whsec_test')
   const sig = generateStripeSignature(secret, payload)
 
   // Post webhook to server endpoint with proper Stripe-Signature header
