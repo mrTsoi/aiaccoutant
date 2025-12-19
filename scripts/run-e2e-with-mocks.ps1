@@ -17,7 +17,10 @@ param(
     [int]$StripeMockPort = 12111,
     
     [Parameter(Mandatory=$false)]
-    [int]$MaxWaitSeconds = 60
+    [int]$MaxWaitSeconds = 60,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$KeepAlive = $false
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,7 +53,7 @@ Write-Info "Detecting Docker Compose installation..."
 
 # Test for docker compose (v2 - plugin style)
 try {
-    $null = docker compose version 2>&1
+    $output = docker compose version 2>&1
     if ($LASTEXITCODE -eq 0) {
         $DockerComposeCmd = "docker", "compose"
         $DockerComposeCmdType = "docker compose (v2)"
@@ -58,13 +61,14 @@ try {
     }
 } catch {
     # docker compose not available, will try v1
+    Write-Info "Docker Compose v2 not detected, trying v1..."
 }
 
 # If v2 not found, try docker-compose (v1 - standalone)
 if ($null -eq $DockerComposeCmd) {
     try {
         $dockerComposeExe = Get-Command docker-compose -ErrorAction Stop
-        $null = docker-compose version 2>&1
+        $output = docker-compose version 2>&1
         if ($LASTEXITCODE -eq 0) {
             $DockerComposeCmd = "docker-compose"
             $DockerComposeCmdType = "docker-compose (v1)"
@@ -72,6 +76,7 @@ if ($null -eq $DockerComposeCmd) {
         }
     } catch {
         # docker-compose also not available
+        Write-Info "Docker Compose v1 not detected"
     }
 }
 
@@ -196,20 +201,28 @@ try {
     Write-Success "All mock services are ready!"
     Write-Info "Next.js would run on port $NextPort (not implemented in this version)"
     Write-Info ""
-    Write-Info "Mock services are running. Press Ctrl+C to stop them."
-    Write-Info "Or run the following to stop manually:"
-    Write-Info "  docker compose -f $ComposeFilePath down -v"
-    Write-Info ""
     
-    # Keep the script running until interrupted
-    # In a full E2E implementation, this would be replaced with actual test execution
-    try {
-        Write-Host "Press Ctrl+C to stop..." -ForegroundColor Yellow
-        while ($true) {
-            Start-Sleep -Seconds 1
+    if ($KeepAlive) {
+        # Keep services running for interactive use
+        Write-Info "Mock services are running. Press Ctrl+C to stop them."
+        Write-Info "Or run the following to stop manually:"
+        Write-Info "  docker compose -f $ComposeFilePath down -v"
+        Write-Info ""
+        
+        try {
+            Write-Host "Press Ctrl+C to stop..." -ForegroundColor Yellow
+            while ($true) {
+                Start-Sleep -Seconds 1
+            }
+        } catch {
+            Write-Info "Interrupted by user"
         }
-    } catch {
-        Write-Info "Interrupted by user"
+    } else {
+        # CI/CD mode - exit successfully after starting services
+        Write-Info "Services started successfully (CI mode - exiting now)"
+        Write-Info "To stop services, run:"
+        Write-Info "  docker compose -f $ComposeFilePath down -v"
+        exit 0
     }
     
 } catch {

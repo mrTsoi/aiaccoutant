@@ -28,12 +28,16 @@ Orchestrates the E2E testing workflow:
 - `-NextPort <int>`: Port for Next.js application (default: 3000)
 - `-StripeMockPort <int>`: Port for stripe-mock (default: 12111)
 - `-MaxWaitSeconds <int>`: Maximum time to wait for services (default: 60)
+- `-KeepAlive`: Switch to keep services running interactively (default: false)
 
 #### Usage
 
 ```powershell
-# Basic usage
+# CI/CD mode (default) - starts services and exits
 pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./scripts/run-e2e-with-mocks.ps1
+
+# Interactive mode - keeps services running
+pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./scripts/run-e2e-with-mocks.ps1 -KeepAlive
 
 # Custom ports
 pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./scripts/run-e2e-with-mocks.ps1 -NextPort 3001 -StripeMockPort 12112
