@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getPlaidClient } from '@/lib/plaid'
@@ -16,7 +16,7 @@ function toTxType(amount: number): 'DEBIT' | 'CREDIT' {
   return amount < 0 ? 'CREDIT' : 'DEBIT'
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const supabase = await createClient()
 
   const {

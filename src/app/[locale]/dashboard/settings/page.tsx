@@ -12,6 +12,7 @@ import { DomainSettings } from '@/components/settings/domain-settings'
 import { BankFeedSettings } from '@/components/settings/bank-feed-settings'
 import { ExternalSourcesSettings } from '@/components/settings/external-sources-settings'
 import { AutomatedSyncSettings } from '@/components/settings/automated-sync-settings'
+import { TenantMismatchPolicyTenantSettings } from '@/components/settings/tenant-mismatch-policy-settings'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function SettingsPage() {
@@ -46,6 +47,7 @@ export default function SettingsPage() {
         <TabsContent value="general" className="space-y-4">
           <TenantSettings />
           <BatchProcessingConfig />
+          <TenantMismatchPolicyTenantSettings />
           <ExchangeRateList />
         </TabsContent>
 

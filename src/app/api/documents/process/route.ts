@@ -86,7 +86,10 @@ export async function POST(request: NextRequest) {
       message: 'Document processed successfully',
       documentId,
       validationStatus: result.validationStatus,
-      validationFlags: result.validationFlags
+      validationFlags: result.validationFlags,
+      tenantCandidates: result.tenantCandidates ?? [],
+      isMultiTenant: result.isMultiTenant ?? false,
+      tenantCorrection: result.tenantCorrection ?? { actionTaken: 'NONE' }
     })
 
   } catch (error) {
