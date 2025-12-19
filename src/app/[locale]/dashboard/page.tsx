@@ -4,18 +4,85 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useTenant } from '@/hooks/use-tenant'
+import { useDashboardPersonalization } from '@/hooks/use-dashboard-personalization'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, CreditCard, TrendingUp, Users, ArrowRight, Clock, CheckCircle, XCircle, Crown } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { FileText, CreditCard, TrendingUp, Users, ArrowRight, Clock, CheckCircle, XCircle, Crown, ChevronUp, ChevronDown, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { useSubscription } from '@/hooks/use-subscription'
+import type { DashboardLayoutV1, DashboardWidgetType, WidgetSize, UserRole } from '@/lib/dashboard/registry'
+import { getTemplateByKey } from '@/lib/dashboard/registry'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 
 interface DashboardStats {
   documentCount: number
   pendingTransactions: number
   monthlyRevenue: number
   teamMembers: number
+}
+
+type DashboardExtraStats = {
+  documentsProcessed: number
+  documentsFailed: number
+  documentsProcessing: number
+  transactionsDraft: number
+  transactionsPosted: number
+  transactionsVoid: number
+  monthRevenue: number
+  monthExpenses: number
+  monthNet: number
+}
+
+type ExternalSourceRow = {
+  id: string
+  name: string
+  provider: string
+  enabled: boolean | null
+  schedule_minutes: number | null
+  last_run_at: string | null
+  config?: {
+    remote_path?: string
+    file_glob?: string
+    folder_id?: string
+    folder_name?: string
+  } | null
+}
+
+type ExternalSourceRunRow = {
+  source_id: string
+  status: 'RUNNING' | 'SUCCESS' | 'ERROR' | 'SKIPPED' | string
+  started_at: string | null
+  finished_at: string | null
+  inserted_count: number | null
+  message: string | null
+}
+
+type ExternalCronConfig = {
+  configured: boolean
+  enabled: boolean
+  default_run_limit: number
+  key_prefix?: string | null
+}
+
+type UsageSummary = {
+  total_calls: number
+  success_calls: number
+  error_calls: number
+  tokens_input: number
+  tokens_output: number
+}
+
+type TrendSummary = {
+  docs_current_7d: number
+  docs_prev_7d: number
+  revenue_current_month: number
+  revenue_prev_month: number
 }
 
 interface ActivityItem {
@@ -29,6 +96,13 @@ interface ActivityItem {
 
 export default function DashboardPage() {
   const { currentTenant } = useTenant()
+  const {
+    tenantId: personalizationTenantId,
+    selectedTemplateKey,
+    layout,
+    setLayout,
+    isCustomizing,
+  } = useDashboardPersonalization()
   const { subscription, loading: subLoading, refreshSubscription } = useSubscription()
     // Payment Modal State
     const [showPaymentModal, setShowPaymentModal] = useState(false)
@@ -110,8 +184,75 @@ export default function DashboardPage() {
     monthlyRevenue: 0,
     teamMembers: 0
   })
+  const [extraStats, setExtraStats] = useState<DashboardExtraStats>({
+    documentsProcessed: 0,
+    documentsFailed: 0,
+    documentsProcessing: 0,
+    transactionsDraft: 0,
+    transactionsPosted: 0,
+    transactionsVoid: 0,
+    monthRevenue: 0,
+    monthExpenses: 0,
+    monthNet: 0,
+  })
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  const templateRole: UserRole | null = useMemo(() => {
+    if (!selectedTemplateKey) return null
+    const tpl = getTemplateByKey(selectedTemplateKey)
+    return tpl?.role ?? null
+  }, [selectedTemplateKey])
+
+  const widgetLabels: Record<DashboardWidgetType, string> = {
+    kpis: 'KPIs',
+    quick_actions: 'Quick Actions',
+    recent_activity: 'Recent Activity',
+    subscription_status: 'Subscription Status',
+    admin_shortcuts: 'Admin Shortcuts',
+    alerts: 'Alerts',
+    work_queue: 'Work Queue',
+    document_pipeline: 'Document Pipeline',
+    transaction_health: 'Transaction Health',
+    profit_loss_snapshot: 'Profit & Loss Snapshot',
+    external_import_schedule: 'Import Schedule',
+    next_steps: 'What to do next',
+    usage: 'Usage',
+    reports_overview: 'Reports',
+    trends: 'Trends',
+  }
+
+  const addableWidgets: DashboardWidgetType[] = useMemo(() => {
+    const role = templateRole
+    if (!role) {
+      return ['kpis', 'quick_actions', 'recent_activity', 'subscription_status', 'alerts', 'work_queue', 'document_pipeline', 'transaction_health', 'profit_loss_snapshot']
+    }
+    switch (role) {
+      case 'OPERATOR':
+        return ['quick_actions', 'recent_activity', 'alerts', 'work_queue', 'document_pipeline', 'external_import_schedule', 'next_steps', 'reports_overview', 'trends', 'subscription_status', 'kpis']
+      case 'ACCOUNTANT':
+        return ['transaction_health', 'profit_loss_snapshot', 'work_queue', 'recent_activity', 'alerts', 'external_import_schedule', 'next_steps', 'reports_overview', 'trends', 'usage', 'subscription_status', 'kpis', 'quick_actions']
+      case 'SUPER_ADMIN':
+        return ['admin_shortcuts', 'alerts', 'usage', 'trends', 'recent_activity', 'subscription_status', 'kpis']
+      case 'COMPANY_ADMIN':
+      default:
+        return ['kpis', 'profit_loss_snapshot', 'transaction_health', 'work_queue', 'document_pipeline', 'alerts', 'external_import_schedule', 'next_steps', 'reports_overview', 'trends', 'usage', 'quick_actions', 'recent_activity', 'subscription_status']
+    }
+  }, [templateRole])
+
+  const [addWidgetOpen, setAddWidgetOpen] = useState(false)
+
+  const [externalSources, setExternalSources] = useState<ExternalSourceRow[]>([])
+  const [externalRunsBySourceId, setExternalRunsBySourceId] = useState<Record<string, ExternalSourceRunRow | null>>({})
+  const [externalCronConfig, setExternalCronConfig] = useState<ExternalCronConfig | null>(null)
+
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null)
+  const [trendSummary, setTrendSummary] = useState<TrendSummary>({
+    docs_current_7d: 0,
+    docs_prev_7d: 0,
+    revenue_current_month: 0,
+    revenue_prev_month: 0,
+  })
 
   const fetchDashboardData = useCallback(async () => {
     if (!tenantId) return
@@ -121,11 +262,26 @@ export default function DashboardPage() {
       const startDate = format(startOfMonth(new Date()), 'yyyy-MM-dd')
       const endDate = format(endOfMonth(new Date()), 'yyyy-MM-dd')
 
+      const now = new Date()
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+
       // 1. Fetch Counts
-      const [docsRes, txRes, membersRes] = await Promise.all([
+      const [docsRes, txDraftRes, membersRes] = await Promise.all([
         supabase.from('documents').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId),
         supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'DRAFT'),
         supabase.from('memberships').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+      ])
+
+      const [docProcessedRes, docFailedRes, docProcessingRes, txPostedRes, txVoidRes] = await Promise.all([
+        supabase.from('documents').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'PROCESSED'),
+        supabase.from('documents').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'FAILED'),
+        supabase.from('documents').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'PROCESSING'),
+        supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'POSTED'),
+        supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('status', 'VOID'),
       ])
 
       // 2. Fetch Revenue (server-side RPC via secure API)
@@ -142,16 +298,146 @@ export default function DashboardPage() {
         plData = null
       }
 
-      const revenue = plData 
+      const revenue = plData
         ? plData.filter((row) => row.account_type === 'REVENUE').reduce((sum: number, row) => sum + (row.amount || 0), 0)
         : 0
 
+      const expenses = plData
+        ? plData.filter((row) => row.account_type === 'EXPENSE').reduce((sum: number, row) => sum + (row.amount || 0), 0)
+        : 0
+
+      const net = revenue - expenses
+
+      // 2b. Previous month revenue for trend
+      let prevRevenue = 0
+      try {
+        const prevStart = format(prevMonthStart, 'yyyy-MM-dd')
+        const prevEnd = format(new Date(currentMonthStart.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+        const resPrev = await fetch(
+          `/api/dashboard/profit-loss?p_tenant_id=${encodeURIComponent(tenantId)}&p_start_date=${encodeURIComponent(prevStart)}&p_end_date=${encodeURIComponent(prevEnd)}`
+        )
+        if (resPrev.ok) {
+          const jsonPrev = await resPrev.json()
+          const prevData = (jsonPrev?.data || []) as Array<{ account_type?: string; amount?: number }>
+          prevRevenue = prevData
+            .filter((row) => row.account_type === 'REVENUE')
+            .reduce((sum: number, row) => sum + (row.amount || 0), 0)
+        }
+      } catch {
+        prevRevenue = 0
+      }
+
       setStats({
         documentCount: docsRes.count || 0,
-        pendingTransactions: txRes.count || 0,
+        pendingTransactions: txDraftRes.count || 0,
         monthlyRevenue: revenue,
         teamMembers: membersRes.count || 0
       })
+
+      setExtraStats({
+        documentsProcessed: docProcessedRes.count || 0,
+        documentsFailed: docFailedRes.count || 0,
+        documentsProcessing: docProcessingRes.count || 0,
+        transactionsDraft: txDraftRes.count || 0,
+        transactionsPosted: txPostedRes.count || 0,
+        transactionsVoid: txVoidRes.count || 0,
+        monthRevenue: revenue,
+        monthExpenses: expenses,
+        monthNet: net,
+      })
+
+      // 4. External import schedule (sources + last run)
+      try {
+        const sourcesRes = await supabase
+          .from('external_document_sources')
+          .select('id, name, provider, enabled, schedule_minutes, last_run_at, config')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: true })
+
+        if (!sourcesRes.error) {
+          const sources = (sourcesRes.data || []) as any as ExternalSourceRow[]
+          setExternalSources(sources)
+
+          if (sources.length > 0) {
+            const runsRes = await supabase
+              .from('external_document_source_runs')
+              .select('source_id, status, started_at, finished_at, inserted_count, message')
+              .eq('tenant_id', tenantId)
+              .order('started_at', { ascending: false })
+              .limit(50)
+
+            if (!runsRes.error) {
+              const runs = (runsRes.data || []) as any as ExternalSourceRunRow[]
+              const map: Record<string, ExternalSourceRunRow | null> = {}
+              for (const s of sources) map[s.id] = null
+              for (const r of runs) {
+                if (!map[r.source_id]) map[r.source_id] = r
+              }
+              setExternalRunsBySourceId(map)
+            }
+          } else {
+            setExternalRunsBySourceId({})
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const cronRes = await fetch(`/api/external-sources/cron?tenant_id=${encodeURIComponent(tenantId)}`)
+        if (cronRes.ok) {
+          const json = await cronRes.json()
+          setExternalCronConfig({
+            configured: !!json.configured,
+            enabled: !!json.enabled,
+            default_run_limit: Number(json.default_run_limit ?? 10),
+            key_prefix: json.key_prefix ?? null,
+          })
+        } else {
+          setExternalCronConfig(null)
+        }
+      } catch {
+        setExternalCronConfig(null)
+      }
+
+      // 5. Usage summary (AI)
+      try {
+        const u = await fetch(`/api/dashboard/usage?tenant_id=${encodeURIComponent(tenantId)}`)
+        if (u.ok) {
+          const json = await u.json()
+          setUsageSummary(json?.usage ?? null)
+        } else {
+          setUsageSummary(null)
+        }
+      } catch {
+        setUsageSummary(null)
+      }
+
+      // 6. Simple trends
+      try {
+        const [docsCurrent7d, docsPrev7d] = await Promise.all([
+          supabase
+            .from('documents')
+            .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
+            .gte('created_at', sevenDaysAgo.toISOString()),
+          supabase
+            .from('documents')
+            .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
+            .gte('created_at', fourteenDaysAgo.toISOString())
+            .lt('created_at', sevenDaysAgo.toISOString()),
+        ])
+
+        setTrendSummary({
+          docs_current_7d: docsCurrent7d.count || 0,
+          docs_prev_7d: docsPrev7d.count || 0,
+          revenue_current_month: revenue,
+          revenue_prev_month: prevRevenue,
+        })
+      } catch {
+        setTrendSummary((prev) => ({ ...prev, revenue_current_month: revenue, revenue_prev_month: prevRevenue }))
+      }
 
       // 3. Fetch Recent Activity
       const [recentDocs, recentTx] = await Promise.all([
@@ -235,6 +521,660 @@ export default function DashboardPage() {
     return <Clock className="w-4 h-4 text-yellow-500" />
   }
 
+  // If tenant context and personalization get out of sync, prefer tenant context.
+  const effectiveTenantId = tenantId || personalizationTenantId
+
+  const updateLayout = (fn: (l: DashboardLayoutV1) => DashboardLayoutV1) => {
+    setLayout((prev) => {
+      if (!prev) return prev
+      const next = fn(JSON.parse(JSON.stringify(prev)) as DashboardLayoutV1)
+      return next
+    })
+  }
+
+  const moveWidget = (widgetId: string, direction: 'up' | 'down') => {
+    updateLayout((l) => {
+      const idx = l.order.indexOf(widgetId)
+      if (idx < 0) return l
+      const swapWith = direction === 'up' ? idx - 1 : idx + 1
+      if (swapWith < 0 || swapWith >= l.order.length) return l
+      const nextOrder = [...l.order]
+      ;[nextOrder[idx], nextOrder[swapWith]] = [nextOrder[swapWith], nextOrder[idx]]
+      return { ...l, order: nextOrder }
+    })
+  }
+
+  const setWidgetHidden = (widgetId: string, hidden: boolean) => {
+    updateLayout((l) => {
+      return {
+        ...l,
+        widgets: l.widgets.map((w) => (w.id === widgetId ? { ...w, hidden } : w)),
+      }
+    })
+  }
+
+  const setWidgetSize = (widgetId: string, size: WidgetSize) => {
+    updateLayout((l) => {
+      return {
+        ...l,
+        widgets: l.widgets.map((w) => (w.id === widgetId ? { ...w, size } : w)),
+      }
+    })
+  }
+
+  const addWidget = (type: DashboardWidgetType) => {
+    if (!layout) return
+
+    const makeId = () => {
+      const c: any = globalThis as any
+      const suffix = typeof c?.crypto?.randomUUID === 'function'
+        ? c.crypto.randomUUID()
+        : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+      return `w_${type}_${suffix}`
+    }
+
+    updateLayout((l) => {
+      const existing = new Set(l.widgets.map(w => w.id))
+      let id = makeId()
+      while (existing.has(id)) id = makeId()
+
+      return {
+        ...l,
+        widgets: [...l.widgets, { id, type, size: 'M' as WidgetSize }],
+        order: [...l.order, id],
+      }
+    })
+  }
+
+  const colSpanClass = (size: WidgetSize) => {
+    if (size === 'S') return 'col-span-12 lg:col-span-4'
+    if (size === 'M') return 'col-span-12 lg:col-span-6'
+    return 'col-span-12'
+  }
+
+  const renderWidget = (type: DashboardWidgetType) => {
+    switch (type) {
+      case 'kpis':
+        return (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {statCards.map((stat, index) => (
+              <Card key={index}>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">{stat.title}</CardTitle>
+                  {stat.icon}
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{loading ? '-' : stat.value}</div>
+                  <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
+      case 'quick_actions':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Get started with these common tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Link
+                  href="/dashboard/documents"
+                  className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <FileText className="w-6 h-6 text-blue-600" />
+                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                  </div>
+                  <h3 className="font-medium">Upload Document</h3>
+                  <p className="text-sm text-gray-500">Add a new invoice or receipt</p>
+                </Link>
+
+                <Link
+                  href="/dashboard/transactions"
+                  className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <CreditCard className="w-6 h-6 text-green-600" />
+                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors" />
+                  </div>
+                  <h3 className="font-medium">Create Transaction</h3>
+                  <p className="text-sm text-gray-500">Manually add a transaction</p>
+                </Link>
+
+                <Link
+                  href="/dashboard/reports"
+                  className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <TrendingUp className="w-6 h-6 text-purple-600" />
+                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                  </div>
+                  <h3 className="font-medium">View Reports</h3>
+                  <p className="text-sm text-gray-500">Check financial reports</p>
+                </Link>
+
+                <Link
+                  href="/dashboard/settings?tab=billing"
+                  className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <Crown className="w-6 h-6 text-yellow-600" />
+                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-yellow-600 transition-colors" />
+                  </div>
+                  <h3 className="font-medium">Subscription</h3>
+                  <p className="text-sm text-gray-500">{subscription?.plan_name || 'Free Plan'}</p>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'recent_activity':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>Your latest transactions and documents</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-8 text-gray-500">Loading activity...</div>
+              ) : recentActivity.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No recent activity</p>
+                  <p className="text-sm mt-1">Start by uploading your first document</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentActivity.map((item) => (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`p-2 rounded-full ${item.type === 'DOCUMENT' ? 'bg-blue-100' : 'bg-green-100'}`}
+                        >
+                          {item.type === 'DOCUMENT' ? (
+                            <FileText className="w-4 h-4 text-blue-600" />
+                          ) : (
+                            <CreditCard className="w-4 h-4 text-green-600" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{item.title}</p>
+                          <p className="text-xs text-gray-500">{item.subtitle}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          {getStatusIcon(item.status)}
+                          <span className="capitalize">{item.status.toLowerCase()}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 hidden sm:block">
+                          {format(new Date(item.date), 'MMM dd, HH:mm')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      case 'subscription_status':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Subscription</CardTitle>
+              <CardDescription>Plan and access status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm text-gray-600">Plan</div>
+                  <div className="text-base font-medium">{subscription?.plan_name || 'Free Plan'}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-600">Status</div>
+                  <Badge variant={subscription?.status === 'active' ? 'default' : 'secondary'} className="capitalize">
+                    {subscription?.status || 'unknown'}
+                  </Badge>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Link href="/dashboard/settings?tab=billing" className="text-sm text-primary underline">
+                  Manage billing
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'admin_shortcuts':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin Shortcuts</CardTitle>
+              <CardDescription>Platform administration</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <Link href="/admin">
+                  <Button variant="outline" size="sm">Go to Admin</Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'alerts':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Alerts</CardTitle>
+              <CardDescription>What needs attention right now</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                {subscription && !['active', 'trialing'].includes(subscription.status) && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Billing issue</div>
+                      <div className="text-gray-500">Subscription is {subscription.status}</div>
+                    </div>
+                    <Link href="/dashboard/settings?tab=billing" className="text-primary underline">Fix</Link>
+                  </div>
+                )}
+
+                {extraStats.documentsFailed > 0 && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Failed documents</div>
+                      <div className="text-gray-500">{extraStats.documentsFailed} need review</div>
+                    </div>
+                    <Link href="/dashboard/documents" className="text-primary underline">View</Link>
+                  </div>
+                )}
+
+                {extraStats.transactionsDraft > 0 && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Draft transactions</div>
+                      <div className="text-gray-500">{extraStats.transactionsDraft} pending</div>
+                    </div>
+                    <Link href="/dashboard/transactions" className="text-primary underline">Review</Link>
+                  </div>
+                )}
+
+                {subscription && ['active', 'trialing'].includes(subscription.status) && extraStats.documentsFailed === 0 && extraStats.transactionsDraft === 0 && (
+                  <div className="text-gray-500">No urgent alerts.</div>
+                )}
+
+                {!subscription && (
+                  <div className="text-gray-500">Loading alerts…</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'profit_loss_snapshot':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Profit & Loss</CardTitle>
+              <CardDescription>Current month snapshot</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Revenue</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : `$${extraStats.monthRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Expenses</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : `$${extraStats.monthExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Net</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : `$${extraStats.monthNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Link href="/dashboard/reports" className="text-sm text-primary underline">Open reports</Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'document_pipeline':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Document Pipeline</CardTitle>
+              <CardDescription>Status breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Processing</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : extraStats.documentsProcessing}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Processed</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : extraStats.documentsProcessed}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Failed</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : extraStats.documentsFailed}</div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Link href="/dashboard/documents" className="text-sm text-primary underline">Go to documents</Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'transaction_health':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Transaction Health</CardTitle>
+              <CardDescription>Status breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Draft</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : extraStats.transactionsDraft}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Posted</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : extraStats.transactionsPosted}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Void</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : extraStats.transactionsVoid}</div>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Link href="/dashboard/transactions" className="text-sm text-primary underline">Go to transactions</Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'work_queue':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Work Queue</CardTitle>
+              <CardDescription>Next actions for this tenant</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <div className="font-medium">Draft transactions</div>
+                    <div className="text-gray-500">{loading ? '-' : extraStats.transactionsDraft} pending</div>
+                  </div>
+                  <Link href="/dashboard/transactions" className="text-primary underline">Open</Link>
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <div className="font-medium">Failed documents</div>
+                    <div className="text-gray-500">{loading ? '-' : extraStats.documentsFailed} need review</div>
+                  </div>
+                  <Link href="/dashboard/documents" className="text-primary underline">Open</Link>
+                </div>
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <div className="font-medium">Documents processing</div>
+                    <div className="text-gray-500">{loading ? '-' : extraStats.documentsProcessing} in progress</div>
+                  </div>
+                  <Link href="/dashboard/documents" className="text-primary underline">View</Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'reports_overview':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Reports</CardTitle>
+              <CardDescription>Financial reporting shortcuts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Link href="/dashboard/reports" className="rounded-md border p-3 hover:bg-gray-50">
+                  <div className="font-medium text-sm">Financial Reports</div>
+                  <div className="text-xs text-gray-500">P&L, balance sheet, exports</div>
+                </Link>
+                <Link href="/dashboard/transactions" className="rounded-md border p-3 hover:bg-gray-50">
+                  <div className="font-medium text-sm">Transactions</div>
+                  <div className="text-xs text-gray-500">Review drafts and postings</div>
+                </Link>
+              </div>
+              <div className="mt-4">
+                <Link href="/dashboard/reports" className="text-sm text-primary underline">Open reports</Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'external_import_schedule':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Import Schedule</CardTitle>
+              <CardDescription>External sources and next runs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {externalSources.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  No external sources configured.
+                  <div className="mt-2">
+                    <Link href="/dashboard/settings?tab=external-sources" className="text-primary underline">Set up External Sources</Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {externalCronConfig ? (
+                    <div className="rounded-md border p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">Scheduler</div>
+                        <Badge variant={externalCronConfig.enabled ? 'default' : 'secondary'}>
+                          {externalCronConfig.configured ? (externalCronConfig.enabled ? 'Enabled' : 'Disabled') : 'Not configured'}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500">
+                        Default run limit: {externalCronConfig.default_run_limit}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {externalSources.map((s) => {
+                    const schedule = Number(s.schedule_minutes || 60)
+                    const lastRun = s.last_run_at ? new Date(s.last_run_at) : null
+                    const nextRun = lastRun ? new Date(lastRun.getTime() + schedule * 60 * 1000) : null
+                    const run = externalRunsBySourceId[s.id] || null
+
+                    const cfg = (s.config || {}) as any
+                    const remotePath = typeof cfg.remote_path === 'string' && cfg.remote_path.trim().length > 0 ? cfg.remote_path : null
+                    const fileGlob = typeof cfg.file_glob === 'string' && cfg.file_glob.trim().length > 0 ? cfg.file_glob : null
+                    const folderName = typeof cfg.folder_name === 'string' && cfg.folder_name.trim().length > 0 ? cfg.folder_name : null
+                    const folderId = typeof cfg.folder_id === 'string' && cfg.folder_id.trim().length > 0 ? cfg.folder_id : null
+
+                    const detail = (() => {
+                      if (s.provider === 'GOOGLE_DRIVE' || s.provider === 'ONEDRIVE') {
+                        if (folderName) return `Folder: ${folderName}`
+                        if (folderId) return `Folder ID: ${folderId}`
+                        return 'Folder: not set'
+                      }
+                      const parts: string[] = []
+                      if (remotePath) parts.push(`Path: ${remotePath}`)
+                      if (fileGlob) parts.push(`Glob: ${fileGlob}`)
+                      if (parts.length === 0) return 'Path/glob not set'
+                      return parts.join(' • ')
+                    })()
+
+                    return (
+                      <div key={s.id} className="rounded-md border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-medium text-sm">{s.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {s.provider} • every {schedule} min • {s.enabled === false ? 'disabled' : 'enabled'}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">{detail}</div>
+                          </div>
+                          {run ? (
+                            <Badge variant={run.status === 'SUCCESS' ? 'default' : run.status === 'ERROR' ? 'destructive' : 'secondary'}>
+                              {run.status}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">No runs yet</Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs text-gray-600">
+                          <div>
+                            Last run: {lastRun ? format(lastRun, 'MMM dd, HH:mm') : '—'}
+                          </div>
+                          <div>
+                            Next run: {nextRun ? format(nextRun, 'MMM dd, HH:mm') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  <div>
+                    <Link href="/dashboard/settings?tab=external-sources" className="text-sm text-primary underline">
+                      Manage external sources
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      case 'next_steps':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>What to do next</CardTitle>
+              <CardDescription>Suggested actions based on your activity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                {stats.documentCount === 0 && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Upload your first document</div>
+                      <div className="text-gray-500">Start building your records</div>
+                    </div>
+                    <Link href="/dashboard/documents" className="text-primary underline">Upload</Link>
+                  </div>
+                )}
+
+                {externalSources.length === 0 && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Connect an import source</div>
+                      <div className="text-gray-500">Schedule folder/SFTP imports</div>
+                    </div>
+                    <Link href="/dashboard/settings?tab=external-sources" className="text-primary underline">Set up</Link>
+                  </div>
+                )}
+
+                {extraStats.transactionsDraft > 0 && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Review draft transactions</div>
+                      <div className="text-gray-500">{extraStats.transactionsDraft} drafts waiting</div>
+                    </div>
+                    <Link href="/dashboard/transactions" className="text-primary underline">Review</Link>
+                  </div>
+                )}
+
+                {extraStats.documentsFailed > 0 && (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <div className="font-medium">Fix failed documents</div>
+                      <div className="text-gray-500">{extraStats.documentsFailed} failed</div>
+                    </div>
+                    <Link href="/dashboard/documents" className="text-primary underline">View</Link>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <div className="font-medium">Generate a report</div>
+                    <div className="text-gray-500">P&L, balance sheet, exports</div>
+                  </div>
+                  <Link href="/dashboard/reports" className="text-primary underline">Open</Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'usage':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Usage</CardTitle>
+              <CardDescription>AI usage for this tenant (this month)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!usageSummary ? (
+                <div className="text-sm text-gray-500">Usage data not available.</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-gray-600">Calls</div>
+                    <div className="text-lg font-semibold">{usageSummary.total_calls.toLocaleString()}</div>
+                    <div className="text-xs text-gray-500">{usageSummary.success_calls.toLocaleString()} success • {usageSummary.error_calls.toLocaleString()} error</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-gray-600">Tokens</div>
+                    <div className="text-lg font-semibold">{(usageSummary.tokens_input + usageSummary.tokens_output).toLocaleString()}</div>
+                    <div className="text-xs text-gray-500">In {usageSummary.tokens_input.toLocaleString()} • Out {usageSummary.tokens_output.toLocaleString()}</div>
+                  </div>
+                </div>
+              )}
+              <div className="mt-4">
+                <Link href="/dashboard/settings?tab=ai" className="text-sm text-primary underline">AI settings</Link>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      case 'trends':
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Trends</CardTitle>
+              <CardDescription>Recent activity signals</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Documents (7 days)</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : trendSummary.docs_current_7d}</div>
+                  <div className="text-xs text-gray-500">Prev 7 days: {loading ? '-' : trendSummary.docs_prev_7d}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-gray-600">Revenue (month)</div>
+                  <div className="text-lg font-semibold">{loading ? '-' : `$${trendSummary.revenue_current_month.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                  <div className="text-xs text-gray-500">Prev month: {loading ? '-' : `$${trendSummary.revenue_prev_month.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      default:
+        return null
+    }
+  }
+
   
   return (
     <>
@@ -266,130 +1206,170 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
       {/* Main Dashboard */}
-      <div className="space-y-4" aria-hidden={showPaymentModal} style={showPaymentModal ? { filter: 'blur(2px)', pointerEvents: 'none', userSelect: 'none' } : {}}>
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat, index) => (
-          <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                {stat.title}
-              </CardTitle>
-              {stat.icon}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{loading ? '-' : stat.value}</div>
-              <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
-            </CardContent>
-          </Card>
-        ))}
-        </div>
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Get started with these common tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Link 
-              href="/dashboard/documents"
-              className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <FileText className="w-6 h-6 text-blue-600" />
-                <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
-              </div>
-              <h3 className="font-medium">Upload Document</h3>
-              <p className="text-sm text-gray-500">Add a new invoice or receipt</p>
-            </Link>
-            
-            <Link 
-              href="/dashboard/transactions"
-              className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <CreditCard className="w-6 h-6 text-green-600" />
-                <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors" />
-              </div>
-              <h3 className="font-medium">Create Transaction</h3>
-              <p className="text-sm text-gray-500">Manually add a transaction</p>
-            </Link>
-            
-            <Link 
-              href="/dashboard/reports"
-              className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
-                <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
-              </div>
-              <h3 className="font-medium">View Reports</h3>
-              <p className="text-sm text-gray-500">Check financial reports</p>
-            </Link>
-
-            <Link 
-              href="/dashboard/settings?tab=billing"
-              className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <Crown className="w-6 h-6 text-yellow-600" />
-                <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-yellow-600 transition-colors" />
-              </div>
-              <h3 className="font-medium">Subscription</h3>
-              <p className="text-sm text-gray-500">{subscription?.plan_name || 'Free Plan'}</p>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Activity */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Your latest transactions and documents</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading activity...</div>
-          ) : recentActivity.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>No recent activity</p>
-              <p className="text-sm mt-1">Start by uploading your first document</p>
-            </div>
+      <TooltipProvider>
+        <div
+          className="space-y-4"
+          aria-hidden={showPaymentModal}
+          style={showPaymentModal ? { filter: 'blur(2px)', pointerEvents: 'none', userSelect: 'none' } : {}}
+        >
+          {!effectiveTenantId ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No company selected</CardTitle>
+                <CardDescription>Select a company to view your dashboard.</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : !layout || !selectedTemplateKey ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Loading dashboard…</CardTitle>
+                <CardDescription>Fetching your template and layout.</CardDescription>
+              </CardHeader>
+            </Card>
           ) : (
-            <div className="space-y-4">
-              {recentActivity.map((item) => (
-                <div key={`${item.type}-${item.id}`} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full ${item.type === 'DOCUMENT' ? 'bg-blue-100' : 'bg-green-100'}`}>
-                      {item.type === 'DOCUMENT' ? (
-                        <FileText className="w-4 h-4 text-blue-600" />
-                      ) : (
-                        <CreditCard className="w-4 h-4 text-green-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{item.title}</p>
-                      <p className="text-xs text-gray-500">{item.subtitle}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      {getStatusIcon(item.status)}
-                      <span className="capitalize">{item.status.toLowerCase()}</span>
-                    </div>
-                    <p className="text-xs text-gray-400 hidden sm:block">
-                      {format(new Date(item.date), 'MMM dd, HH:mm')}
-                    </p>
-                  </div>
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm text-gray-600">
+                  Template: <span className="font-medium">{selectedTemplateKey}</span>
                 </div>
-              ))}
-            </div>
+
+                <div className="flex items-center gap-2">
+                  {isCustomizing && layout && (
+                    <Popover open={addWidgetOpen} onOpenChange={setAddWidgetOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add widget
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[320px] p-0" align="end">
+                        <Command>
+                          <CommandInput placeholder="Search widgets…" />
+                          <CommandList>
+                            <CommandEmpty>No widgets found.</CommandEmpty>
+                            <CommandGroup heading="Widgets">
+                              {addableWidgets
+                                .filter((type) => {
+                                  const existingTypes = new Set(layout.widgets.map(w => w.type))
+                                  return !existingTypes.has(type)
+                                })
+                                .map((type) => (
+                                  <CommandItem
+                                    key={type}
+                                    value={type}
+                                    onSelect={() => {
+                                      addWidget(type)
+                                      setAddWidgetOpen(false)
+                                    }}
+                                  >
+                                    {widgetLabels[type]}
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+
+                  {isCustomizing && (
+                    <Badge variant="secondary">Customizing</Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-12 gap-6">
+                {layout.order
+                  .map((id) => layout.widgets.find((w) => w.id === id))
+                  .filter(Boolean)
+                  .map((w) => {
+                    const widget = w as DashboardLayoutV1['widgets'][number]
+                    const hidden = widget.hidden === true
+
+                    if (hidden && !isCustomizing) return null
+
+                    return (
+                      <div key={widget.id} className={colSpanClass(widget.size)}>
+                        <div className={hidden ? 'opacity-60' : ''}>
+                          {isCustomizing && (
+                            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => moveWidget(widget.id, 'up')}
+                                      aria-label="Move widget up"
+                                    >
+                                      <ChevronUp className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Move up</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => moveWidget(widget.id, 'down')}
+                                      aria-label="Move widget down"
+                                    >
+                                      <ChevronDown className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Move down</TooltipContent>
+                                </Tooltip>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-600">Hide</span>
+                                  <Switch
+                                    checked={!hidden}
+                                    onCheckedChange={(checked) => setWidgetHidden(widget.id, !checked)}
+                                    aria-label="Toggle widget visibility"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-600">Size</span>
+                                <Select
+                                  value={widget.size}
+                                  onValueChange={(v) => setWidgetSize(widget.id, v as WidgetSize)}
+                                >
+                                  <SelectTrigger className="h-9 w-[110px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="S">Small</SelectItem>
+                                    <SelectItem value="M">Medium</SelectItem>
+                                    <SelectItem value="L">Large</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+
+                          {hidden ? (
+                            <Card>
+                              <CardHeader>
+                                <CardTitle className="text-base">Hidden widget</CardTitle>
+                                <CardDescription>{widget.type}</CardDescription>
+                              </CardHeader>
+                            </Card>
+                          ) : (
+                            renderWidget(widget.type)
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </TooltipProvider>
     </>
   )
 }

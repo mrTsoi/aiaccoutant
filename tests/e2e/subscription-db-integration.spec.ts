@@ -216,7 +216,7 @@ test('full signup → subscription → webhook → DB update (integration)', asy
   let customer: any = null
   let subscription: any = null
   // `profiles.id` is UUID in production schema.
-  let profileId = crypto.randomUUID()
+  let profileId: string = crypto.randomUUID()
   let authUserId: string | null = null
 
   try {
@@ -275,13 +275,29 @@ test('full signup → subscription → webhook → DB update (integration)', asy
     const sig = generateStripeSignature(STRIPE_WEBHOOK_SECRET as string, payload)
 
     // Send webhook to application endpoint (the server will use real STRIPE_SECRET_KEY to retrieve subscription details)
-    const res = await page.request.post('/api/webhooks/stripe', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Stripe-Signature': sig
-      },
-      data: event
-    })
+    async function postWebhookWithRetry(attempts = 3) {
+      let lastErr: unknown = null
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          return await page.request.post('/api/webhooks/stripe', {
+            headers: {
+              'Content-Type': 'application/json',
+              'Stripe-Signature': sig
+            },
+            data: event
+          })
+        } catch (err) {
+          lastErr = err
+          const msg = String((err as any)?.message ?? err)
+          const isConnReset = msg.includes('ECONNRESET') || msg.includes('socket hang up')
+          if (!isConnReset || attempt === attempts) throw err
+          await new Promise(r => setTimeout(r, 500 * attempt))
+        }
+      }
+      throw lastErr
+    }
+
+    const res = await postWebhookWithRetry()
 
     expect(res.status()).toBe(200)
 
