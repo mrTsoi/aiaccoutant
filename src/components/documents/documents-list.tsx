@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FileText, Download, Trash2, Search, Filter, Loader2, Eye, RefreshCw, X, CheckSquare, Square, AlertTriangle, Sparkles } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { FileText, Download, Trash2, Search, Filter, Loader2, Eye, RefreshCw, X, CheckSquare, Square, AlertTriangle, Sparkles, ArrowRightLeft } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { DocumentVerificationModal } from './document-verification-modal'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,8 +49,25 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
   // const [verifyingDocId, setVerifyingDocId] = useState<string | null>(null) // Moved to parent
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   
+  // Check if any selected documents have tenant mismatches
+  const hasTenantMismatchesSelected = useMemo(() => {
+    return documents.some(d => 
+      selectedIds.has(d.id) && 
+      d.validation_flags?.includes('WRONG_TENANT')
+    )
+  }, [documents, selectedIds])
+
   // Confirmation Dialog State
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [confirmWorking, setConfirmWorking] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<null | {
+    label: string
+    total: number
+    completed: number
+    moved: number
+    created: number
+    failed: number
+  }>(null)
   const [confirmConfig, setConfirmConfig] = useState<{
     title: string
     description: string
@@ -58,9 +76,20 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
     variant?: 'default' | 'destructive'
   } | null>(null)
 
-  const { currentTenant } = useTenant()
+  const { currentTenant, refreshTenants } = useTenant()
   const { batchSize } = useBatchConfig()
   const supabase = useMemo((): import('@supabase/supabase-js').SupabaseClient<Database> => createClient(), [])
+
+  const runConfirmAction = async () => {
+    if (!confirmConfig?.action) return
+    try {
+      setConfirmWorking(true)
+      await confirmConfig.action()
+    } finally {
+      setConfirmWorking(false)
+      setBulkProgress(null)
+    }
+  }
 
   const fetchDocuments = useCallback(async () => {
     if (!currentTenant) return
@@ -501,6 +530,138 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
     }
   }
 
+  const bulkResolveTenants = async () => {
+    const docsToResolve = documents.filter(d => 
+      selectedIds.has(d.id) && 
+      d.validation_flags?.includes('WRONG_TENANT')
+    )
+
+    if (docsToResolve.length === 0) {
+      toast.info("No documents with 'Wrong Tenant' flag selected.")
+      return
+    }
+
+    setConfirmConfig({
+      title: 'Auto-Resolve Tenant Mismatches',
+      description: `Attempt to automatically reassign or create tenants for ${docsToResolve.length} documents? \n\nDocuments successfully moved will disappear from this tenant's list.`,
+      action: async () => {
+        try {
+          setBulkProgress({
+            label: 'Resolving tenant mismatches…',
+            total: docsToResolve.length,
+            completed: 0,
+            moved: 0,
+            created: 0,
+            failed: 0,
+          })
+
+          setReprocessingIds(prev => {
+            const next = new Set(prev)
+            docsToResolve.forEach(d => next.add(d.id))
+            return next
+          })
+
+          let movedCount = 0
+          let createdCount = 0
+          let failedCount = 0
+
+          const chunks = chunkArray(docsToResolve.map(d => d.id), batchSize)
+
+          for (const chunk of chunks) {
+            await Promise.all(chunk.map(async (id) => {
+              try {
+                const response = await fetch('/api/documents/process', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ documentId: id }),
+                })
+
+                const result = await response.json().catch(() => ({} as any))
+
+                if (response.ok) {
+                  const actionTaken = result?.tenantCorrection?.actionTaken as
+                    | 'NONE'
+                    | 'REASSIGNED'
+                    | 'CREATED'
+                    | 'LIMIT_REACHED'
+                    | 'SKIPPED_MULTI_TENANT'
+                    | 'FAILED'
+                    | undefined
+
+                  if (actionTaken === 'REASSIGNED') movedCount++
+                  else if (actionTaken === 'CREATED') createdCount++
+
+                  // If the document was moved away, remove it from this tenant's list.
+                  if (actionTaken === 'REASSIGNED' || actionTaken === 'CREATED') {
+                    setDocuments((prev) => prev.filter((d) => d.id !== id))
+                  } else {
+                    // Otherwise, refresh this document row (it stayed in the current tenant).
+                    const { data: updatedDoc } = await supabase
+                      .from('documents')
+                      .select('*, document_data(confidence_score, extracted_data)')
+                      .eq('id', id)
+                      .single()
+
+                    if (updatedDoc) {
+                      setDocuments((prev) => prev.map((d) => (d.id === id ? (updatedDoc as unknown as Document) : d)))
+                    }
+                  }
+                } else {
+                  failedCount++
+                }
+              } catch (e) {
+                failedCount++
+              } finally {
+                setBulkProgress((prev) => {
+                  if (!prev) return prev
+                  const next = {
+                    ...prev,
+                    completed: prev.completed + 1,
+                    moved: movedCount,
+                    created: createdCount,
+                    failed: failedCount,
+                  }
+                  return next
+                })
+
+                setReprocessingIds(prev => {
+                  const next = new Set(prev)
+                  next.delete(id)
+                  return next
+                })
+              }
+            }))
+          }
+
+          setSelectedIds(new Set())
+          setShowConfirmDialog(false)
+          
+          if (failedCount === 0) {
+            toast.success(`Resolution complete: ${movedCount} moved, ${createdCount} tenants created.`)
+          } else {
+            toast.warning(`Resolution finished with issues: ${movedCount} moved, ${createdCount} created, ${failedCount} failed.`)
+          }
+
+          if (createdCount > 0) {
+            try {
+              await refreshTenants()
+            } catch (e) {
+              console.error('Failed to refresh tenants after creation:', e)
+            }
+          }
+          
+          fetchDocuments()
+        } catch (error: any) {
+          console.error('Bulk resolution error:', error)
+          toast.error('Bulk resolution failed: ' + error.message)
+        }
+      },
+      actionLabel: 'Resolve All',
+      variant: 'default'
+    })
+    setShowConfirmDialog(true)
+  }
+
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.file_name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter
@@ -533,6 +694,12 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
           <CardTitle>All Documents ({documents.length})</CardTitle>
           {selectedIds.size > 0 && (
             <div className="flex gap-2">
+              {hasTenantMismatchesSelected && (
+                <Button size="sm" variant="outline" onClick={bulkResolveTenants} className="border-yellow-200 bg-yellow-50 hover:bg-yellow-100 text-yellow-700">
+                  <ArrowRightLeft className="w-4 h-4 mr-2" />
+                  Resolve Tenants
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={bulkReprocess}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Reprocess ({selectedIds.size})
@@ -623,7 +790,7 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-medium truncate">{doc.file_name}</h3>
-                      {doc.validation_status === 'NEEDS_REVIEW' && (
+                      {((doc.validation_status === 'NEEDS_REVIEW') || (Array.isArray(doc.validation_flags) && doc.validation_flags.length > 0)) && (
                         <div className="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full" title={doc.validation_flags?.join(', ')}>
                           <AlertTriangle className="w-3 h-3" />
                           <span>
@@ -783,23 +950,58 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
         </div>
       )}
 
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
+      <Dialog
+        open={showConfirmDialog}
+        onOpenChange={(open) => {
+          if (confirmWorking) return
+          setShowConfirmDialog(open)
+        }}
+      >
+        <DialogContent
+          onEscapeKeyDown={(e) => {
+            if (confirmWorking) e.preventDefault()
+          }}
+          onInteractOutside={(e) => {
+            if (confirmWorking) e.preventDefault()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{confirmConfig?.title}</DialogTitle>
             <DialogDescription className="whitespace-pre-wrap">
               {confirmConfig?.description}
+              {confirmWorking && bulkProgress && (
+                <div className="mt-4 space-y-2">
+                  <div className="text-sm text-muted-foreground">{bulkProgress.label}</div>
+                  <Progress value={bulkProgress.total > 0 ? (bulkProgress.completed / bulkProgress.total) * 100 : 0} />
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <div>
+                      {bulkProgress.completed} / {bulkProgress.total} processed
+                    </div>
+                    <div>
+                      Moved: {bulkProgress.moved} • Created: {bulkProgress.created} • Failed: {bulkProgress.failed}
+                    </div>
+                  </div>
+                </div>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)} disabled={confirmWorking}>
               Cancel
             </Button>
             <Button 
               variant={confirmConfig?.variant || 'default'} 
-              onClick={confirmConfig?.action}
+              onClick={runConfirmAction}
+              disabled={confirmWorking}
             >
-              {confirmConfig?.actionLabel}
+              {confirmWorking ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Working…
+                </>
+              ) : (
+                confirmConfig?.actionLabel
+              )}
             </Button>
           </div>
         </DialogContent>

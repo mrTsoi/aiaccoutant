@@ -17,6 +17,28 @@ type Tenant = Database['public']['Tables']['tenants']['Row'] & {
   subscription_status?: string
 }
 
+type DuplicateTenantGroup = {
+  owner_id: string | null
+  normalized_name: string
+  canonical_tenant_id: string
+  canonical_tenant_name: string
+  tenant_ids: string[]
+  tenant_names: string[]
+  tenant_slugs: string[]
+}
+
+type MergeDuplicateTenantsResult = {
+  canonical_tenant_id: string
+  canonical_tenant_name: string
+  normalized_name: string
+  dry_run: boolean
+  delete_empty_duplicates: boolean
+  duplicates_processed: number
+  documents_moved: number
+  tenants_deleted: number
+  tenants_deactivated: number
+}
+
 interface TenantDetails {
   tenant_id: string
   tenant_name: string
@@ -40,6 +62,10 @@ export function TenantManagement() {
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateTenantGroup[]>([])
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false)
+  const [mergeRunningForCanonicalId, setMergeRunningForCanonicalId] = useState<string | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
   const fetchTenants = useCallback(async () => {
@@ -117,6 +143,68 @@ export function TenantManagement() {
     }
   }
 
+  const scanDuplicateTenantsImpl = useCallback(
+    async (silent: boolean) => {
+      setDuplicatesLoading(true)
+      try {
+        const { data, error } = await supabase.rpc('admin_list_duplicate_tenants' as any, {} as any)
+        if (error) throw error
+        setDuplicateGroups((data as any) || [])
+        if (!silent) {
+          toast.success(`Found ${((data as any) || []).length} duplicate group(s)`)
+        }
+      } catch (error: any) {
+        console.error('Error scanning duplicate tenants:', error)
+        toast.error('Failed to scan duplicate tenants: ' + (error?.message || 'Unknown error'))
+      } finally {
+        setDuplicatesLoading(false)
+      }
+    },
+    [supabase]
+  )
+
+  const scanDuplicateTenants = useCallback(async () => {
+    await scanDuplicateTenantsImpl(false)
+  }, [scanDuplicateTenantsImpl])
+
+  const mergeDuplicateTenantGroup = useCallback(
+    async (canonicalTenantId: string) => {
+      const confirmed = window.confirm(
+        'Merge duplicate tenants into the canonical tenant?\n\nThis will move documents and merge memberships/settings/identifiers.\nDuplicate tenants will be deleted only if empty after merge; otherwise they will be deactivated.'
+      )
+      if (!confirmed) return
+
+      setMergeRunningForCanonicalId(canonicalTenantId)
+      try {
+        const { data, error } = await supabase.rpc('admin_merge_duplicate_tenants' as any, {
+          p_canonical_tenant_id: canonicalTenantId,
+          p_delete_empty_duplicates: true,
+          p_dry_run: false
+        } as any)
+
+        if (error) throw error
+
+        const result = (data as any) as MergeDuplicateTenantsResult
+        toast.success(
+          `Merged ${result.duplicates_processed} duplicate(s): moved ${result.documents_moved} docs, deleted ${result.tenants_deleted}, deactivated ${result.tenants_deactivated}`
+        )
+
+        // Optimistically remove the merged group immediately (avoids a stale list
+        // if the subsequent refresh is slow or fails).
+        setDuplicateGroups((prev) => prev.filter((g) => g.canonical_tenant_id !== canonicalTenantId))
+
+        // Refresh both lists so the admin sees the post-merge state.
+        await Promise.all([fetchTenants(), scanDuplicateTenantsImpl(true)])
+      } catch (error: any) {
+        console.error('Error merging duplicate tenants:', error)
+        toast.error('Failed to merge duplicate tenants: ' + (error?.message || 'Unknown error'))
+      } finally {
+        setMergeRunningForCanonicalId(null)
+      }
+    },
+    [fetchTenants, scanDuplicateTenantsImpl, supabase]
+  )
+
   const filteredTenants = tenants.filter(tenant =>
     tenant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tenant.slug.toLowerCase().includes(searchTerm.toLowerCase())
@@ -162,6 +250,74 @@ export function TenantManagement() {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Duplicate Tenant Cleanup */}
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">Duplicate Tenants Cleanup</p>
+              <p className="text-sm text-muted-foreground">
+                Scans for tenants with the same owner and normalized name.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={scanDuplicateTenants}
+              disabled={duplicatesLoading}
+            >
+              {duplicatesLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                'Scan Duplicates'
+              )}
+            </Button>
+          </div>
+
+          {duplicateGroups.length > 0 && (
+            <div className="space-y-2">
+              {duplicateGroups.map((group) => (
+                <div
+                  key={group.canonical_tenant_id}
+                  className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border rounded-lg"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">
+                      {group.canonical_tenant_name}{' '}
+                      <span className="text-sm text-muted-foreground font-normal">
+                        ({group.tenant_ids.length} tenants)
+                      </span>
+                    </p>
+                    <p className="text-sm text-muted-foreground truncate">
+                      Canonical: {group.canonical_tenant_id} • Normalized: {group.normalized_name}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => mergeDuplicateTenantGroup(group.canonical_tenant_id)}
+                    disabled={mergeRunningForCanonicalId !== null}
+                  >
+                    {mergeRunningForCanonicalId === group.canonical_tenant_id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Merging...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Merge Group
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Search */}
         <div className="mb-6">
           <Input

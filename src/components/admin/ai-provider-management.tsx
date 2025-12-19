@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { Loader2, ShieldAlert, Settings2, Star } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -30,6 +31,7 @@ export function AIProviderManagement() {
   const [editConfigJson, setEditConfigJson] = useState('')
   const [editApiKey, setEditApiKey] = useState('')
   const [editIsDefault, setEditIsDefault] = useState(false)
+  const [editDefaultModel, setEditDefaultModel] = useState('')
   const [editPerMinute, setEditPerMinute] = useState<number | ''>('')
   const [editPerHour, setEditPerHour] = useState<number | ''>('')
   const [editPerDay, setEditPerDay] = useState<number | ''>('')
@@ -120,6 +122,14 @@ export function AIProviderManagement() {
     setEditConfigJson(JSON.stringify(cfg, null, 2))
     setEditApiKey(cfg.platform_api_key || '')
     setEditIsDefault(cfg.is_default === true)
+    setEditDefaultModel(
+      String(
+        cfg.defaultModel ??
+          cfg.default_model ??
+          cfg.model ??
+          (Array.isArray(cfg.models) ? (cfg.models[0] ?? '') : '')
+      )
+    )
     setEditPerMinute(provider.per_minute_limit_default ?? cfg.per_minute_limit_default ?? '')
     setEditPerHour(provider.per_hour_limit_default ?? cfg.per_hour_limit_default ?? '')
     setEditPerDay(provider.per_day_limit_default ?? cfg.per_day_limit_default ?? '')
@@ -139,6 +149,7 @@ export function AIProviderManagement() {
     // Inject platform-level fields into config
     parsed.platform_api_key = editApiKey || null
     parsed.is_default = editIsDefault
+    parsed.defaultModel = editDefaultModel.trim() ? editDefaultModel.trim() : null
     parsed.per_minute_limit_default = typeof editPerMinute === 'number' ? editPerMinute : null
     parsed.per_hour_limit_default = typeof editPerHour === 'number' ? editPerHour : null
     parsed.per_day_limit_default = typeof editPerDay === 'number' ? editPerDay : null
@@ -219,7 +230,15 @@ export function AIProviderManagement() {
               {providers.map((p, index) => (
                 <TableRow key={p.id}>
                   <TableCell>
-                    <div className="font-medium">{p.display_name}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium">{p.display_name}</div>
+                      {(p.config as any)?.is_default === true && (
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <Star className="w-3 h-3" />
+                          Default
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-gray-500">{p.name}</div>
                   </TableCell>
                   <TableCell className="max-w-xs truncate text-xs text-gray-600">
@@ -368,6 +387,20 @@ export function AIProviderManagement() {
                 </div>
 
                 <div className="grid gap-2">
+                  <Label htmlFor="default-model">Default Model</Label>
+                  <Input
+                    id="default-model"
+                    value={editDefaultModel}
+                    onChange={(e) => setEditDefaultModel(e.target.value)}
+                    placeholder="e.g. google/gemini-2.0-flash-exp:free"
+                  />
+                  <p className="text-xs text-gray-600">
+                    Used when a tenant has not set a model. If empty, the backend falls back to the first entry in
+                    <code>models</code> (if present) or provider-specific defaults.
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
                   <Label htmlFor="config-json">Provider Config (JSON)</Label>
                   <Textarea
                     id="config-json"
@@ -406,6 +439,7 @@ export function AIProviderManagement() {
 
                     parsed.platform_api_key = editApiKey || null
                     parsed.is_default = editIsDefault
+                    parsed.defaultModel = editDefaultModel.trim() ? editDefaultModel.trim() : null
 
                     try {
                       setSaving(true)

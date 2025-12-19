@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Loader2, Save, ServerCog } from 'lucide-react'
+import { TenantMismatchPolicySettings } from '@/components/admin/tenant-mismatch-policy-settings'
 
 interface BatchConfig {
   default_batch_size: number
@@ -157,111 +158,115 @@ export function ProcessingSettings() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <ServerCog className="h-5 w-5 text-blue-600" />
-          <CardTitle>Concurrent Batch Processing</CardTitle>
-        </div>
-        <CardDescription>
-          Configure global limits for concurrent processing. These settings define the boundaries for all tenants.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label>Default Batch Size</Label>
-            <Input 
-              type="number"
-              min={1}
-              value={config.default_batch_size} 
-              onChange={(e) => setConfig({...config, default_batch_size: parseInt(e.target.value) || 0})}
-            />
-            <p className="text-sm text-muted-foreground">
-              The default number of items processed concurrently if a tenant hasn&apos;t configured their own limit.
-            </p>
-          </div>
-          
-          <div className="space-y-2">
-            <Label>Max Batch Size Limit</Label>
-            <Input 
-              type="number"
-              min={1}
-              value={config.max_batch_size} 
-              onChange={(e) => setConfig({...config, max_batch_size: parseInt(e.target.value) || 0})}
-            />
-            <p className="text-sm text-muted-foreground">
-              The absolute maximum batch size a tenant can configure, regardless of their preference.
-            </p>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <TenantMismatchPolicySettings />
 
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Configuration
-          </Button>
-        </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ServerCog className="h-5 w-5 text-blue-600" />
+            <CardTitle>Concurrent Batch Processing</CardTitle>
+          </div>
+          <CardDescription>
+            Configure global limits for concurrent processing. These settings define the boundaries for all tenants.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label>Default Batch Size</Label>
+              <Input
+                type="number"
+                min={1}
+                value={config.default_batch_size}
+                onChange={(e) => setConfig({ ...config, default_batch_size: parseInt(e.target.value) || 0 })}
+              />
+              <p className="text-sm text-muted-foreground">
+                The default number of items processed concurrently if a tenant hasn&apos;t configured their own limit.
+              </p>
+            </div>
 
-        <div className="border-t pt-6 space-y-3">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <div className="font-medium">Apply to tenants</div>
-              <div className="text-sm text-muted-foreground">
-                Push this configuration into tenant overrides (tenant_settings).
-              </div>
+            <div className="space-y-2">
+              <Label>Max Batch Size Limit</Label>
+              <Input
+                type="number"
+                min={1}
+                value={config.max_batch_size}
+                onChange={(e) => setConfig({ ...config, max_batch_size: parseInt(e.target.value) || 0 })}
+              />
+              <p className="text-sm text-muted-foreground">
+                The absolute maximum batch size a tenant can configure, regardless of their preference.
+              </p>
             </div>
           </div>
-
-          <div className="grid gap-2">
-            <Label>Scope</Label>
-            <Select value={applyScope} onValueChange={(v) => setApplyScope(v as any)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select scope" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all_platform">All tenants (platform-wide)</SelectItem>
-                <SelectItem value="selected_platform">Selected tenants</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {applyScope === 'selected_platform' && (
-            <div className="space-y-2 rounded-md border p-3">
-              <div className="text-sm text-muted-foreground">Select tenants</div>
-              <div className="space-y-2">
-                {tenants.map((t) => {
-                  const checked = selectedTenantIds.includes(t.id)
-                  return (
-                    <label key={t.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(next) => {
-                          const on = next === true
-                          setSelectedTenantIds((prev) => {
-                            const set = new Set(prev)
-                            if (on) set.add(t.id)
-                            else set.delete(t.id)
-                            return Array.from(set)
-                          })
-                        }}
-                      />
-                      <span className={t.is_active === false ? 'text-muted-foreground' : ''}>{t.name}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end">
-            <Button onClick={applyToTenants} disabled={applying}>
-              {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Apply Settings
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save Configuration
             </Button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+
+          <div className="border-t pt-6 space-y-3">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="font-medium">Apply to tenants</div>
+                <div className="text-sm text-muted-foreground">
+                  Push this configuration into tenant overrides (tenant_settings).
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Scope</Label>
+              <Select value={applyScope} onValueChange={(v) => setApplyScope(v as any)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select scope" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all_platform">All tenants (platform-wide)</SelectItem>
+                  <SelectItem value="selected_platform">Selected tenants</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {applyScope === 'selected_platform' && (
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="text-sm text-muted-foreground">Select tenants</div>
+                <div className="space-y-2">
+                  {tenants.map((t) => {
+                    const checked = selectedTenantIds.includes(t.id)
+                    return (
+                      <label key={t.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(next) => {
+                            const on = next === true
+                            setSelectedTenantIds((prev) => {
+                              const set = new Set(prev)
+                              if (on) set.add(t.id)
+                              else set.delete(t.id)
+                              return Array.from(set)
+                            })
+                          }}
+                        />
+                        <span className={t.is_active === false ? 'text-muted-foreground' : ''}>{t.name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button onClick={applyToTenants} disabled={applying}>
+                {applying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Apply Settings
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

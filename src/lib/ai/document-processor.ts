@@ -10,8 +10,11 @@ import {
   insertAIUsageLog,
   getTenantById,
   findBankAccountByTenantAndAccountNumber,
-  upsertDocumentData
+  upsertDocumentData,
+  createService,
+  rpc
 } from '../supabase/typed'
+import { findTenantCandidates } from './tenant-matcher'
 
 type Document = Database['public']['Tables']['documents']['Row']
 type DocumentData = Database['public']['Tables']['document_data']['Insert']
@@ -51,6 +54,64 @@ interface ExtractedData {
   is_belongs_to_tenant?: boolean
 }
 
+function cleanText(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+function normalizeCompanyName(v: unknown): string {
+  const raw = cleanText(v).toLowerCase()
+  if (!raw) return ''
+  return raw
+    .replace(/[\u2010-\u2015]/g, '-')
+    .replace(/[^a-z0-9\s&.-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizeCurrencyCode(v: unknown): string | null {
+  const raw = cleanText(v)
+  if (!raw) return null
+
+  // Handle a few common, unambiguous symbol formats.
+  const compact = raw.replace(/\s+/g, '').toUpperCase()
+  const symbolMap: Record<string, string> = {
+    '€': 'EUR',
+    '£': 'GBP',
+    'HK$': 'HKD',
+    'US$': 'USD',
+    'A$': 'AUD',
+    'C$': 'CAD',
+    'S$': 'SGD',
+  }
+  if (symbolMap[compact]) return symbolMap[compact]
+
+  const upper = raw.trim().toUpperCase()
+  if (/^[A-Z]{3}$/.test(upper)) return upper
+  return null
+}
+
+function nameIncludes(a: string, b: string): boolean {
+  const aa = a.trim()
+  const bb = b.trim()
+  if (aa.length < 2 || bb.length < 2) return false
+  // Avoid pathological matches like single-letter or empty string
+  if (aa.length <= 1 || bb.length <= 1) return false
+  return aa.includes(bb) || bb.includes(aa)
+}
+
+const TENANT_DEBUG_ENABLED = (() => {
+  const raw = process.env.AI_TENANT_DEBUG || process.env.NEXT_PUBLIC_AI_TENANT_DEBUG
+  if (!raw) return false
+  const v = String(raw).trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on'
+})()
+
+function tenantDebugLog(payload: Record<string, unknown>) {
+  if (!TENANT_DEBUG_ENABLED) return
+  // Keep logs compact and predictable; do not log raw extracted_data blobs.
+  console.info('[ai][tenant-debug]', payload)
+}
+
 function getNumberFrom(obj: Record<string, unknown> | undefined, key: string): number {
   if (!obj) return 0
   const v = obj[key]
@@ -62,6 +123,91 @@ function getNumberFrom(obj: Record<string, unknown> | undefined, key: string): n
   return 0
 }
 
+type TenantMismatchPolicy = {
+  allow_auto_tenant_creation: boolean
+  allow_auto_reassignment: boolean
+  min_confidence: number
+}
+
+const DEFAULT_TENANT_MISMATCH_POLICY: TenantMismatchPolicy = {
+  allow_auto_tenant_creation: false,
+  allow_auto_reassignment: false,
+  min_confidence: 0.9,
+}
+
+function normalizeTenantMismatchPolicy(input: unknown): TenantMismatchPolicy {
+  const obj = (input && typeof input === 'object' ? (input as any) : {}) as Record<string, unknown>
+  const allow_auto_tenant_creation = obj.allow_auto_tenant_creation === true
+  const allow_auto_reassignment = obj.allow_auto_reassignment === true
+  const min_confidence_raw = obj.min_confidence
+  const min_confidence =
+    typeof min_confidence_raw === 'number'
+      ? min_confidence_raw
+      : typeof min_confidence_raw === 'string'
+        ? Number(min_confidence_raw)
+        : DEFAULT_TENANT_MISMATCH_POLICY.min_confidence
+
+  return {
+    allow_auto_tenant_creation,
+    allow_auto_reassignment,
+    min_confidence: Number.isFinite(min_confidence) ? min_confidence : DEFAULT_TENANT_MISMATCH_POLICY.min_confidence,
+  }
+}
+
+async function getTenantMismatchPolicy(supabase: any, tenantId: string): Promise<TenantMismatchPolicy> {
+  try {
+    const { data: systemData, error: systemError } = await (supabase.from('system_settings') as any)
+      .select('setting_value')
+      .eq('setting_key', 'tenant_mismatch_policy')
+      .maybeSingle()
+
+    if (systemError && systemError.code !== 'PGRST116') {
+      return DEFAULT_TENANT_MISMATCH_POLICY
+    }
+
+    const systemPolicy = normalizeTenantMismatchPolicy(systemData?.setting_value)
+
+    const { data: tenantData, error: tenantError } = await (supabase.from('tenant_settings') as any)
+      .select('setting_value')
+      .eq('tenant_id', tenantId)
+      .eq('setting_key', 'tenant_mismatch_policy')
+      .maybeSingle()
+
+    if (tenantError && tenantError.code !== 'PGRST116') {
+      return systemPolicy
+    }
+
+    const tenantPolicyRaw = tenantData?.setting_value
+    if (!tenantPolicyRaw) return systemPolicy
+
+    // Tenant setting overrides system setting
+    return normalizeTenantMismatchPolicy({
+      ...systemPolicy,
+      ...(typeof tenantPolicyRaw === 'object' ? tenantPolicyRaw : {}),
+    })
+  } catch {
+    return DEFAULT_TENANT_MISMATCH_POLICY
+  }
+}
+
+function slugifyTenantSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+type TenantCorrectionInfo = {
+  actionTaken: 'NONE' | 'REASSIGNED' | 'CREATED' | 'LIMIT_REACHED' | 'SKIPPED_MULTI_TENANT' | 'FAILED'
+  fromTenantId?: string
+  toTenantId?: string
+  toTenantName?: string
+  message?: string
+}
+
 /**
  * AI Document Processing Service
  * 
@@ -71,6 +217,43 @@ function getNumberFrom(obj: Record<string, unknown> | undefined, key: string): n
  * Current implementation returns mock data for demonstration purposes.
  */
 export class AIProcessingService {
+  private static resolveMergedProviderConfig(config: any): Record<string, any> {
+    const providerCfg = (config?.ai_providers?.config ?? {}) as Record<string, any>
+    const tenantCfg = (config?.custom_config ?? {}) as Record<string, any>
+    return {
+      ...providerCfg,
+      ...tenantCfg,
+    }
+  }
+
+  private static resolveApiKey(config: any): string {
+    const apiKey =
+      (typeof config?.api_key_encrypted === 'string' && config.api_key_encrypted.trim()
+        ? config.api_key_encrypted.trim()
+        : null) ||
+      (typeof config?.ai_providers?.config?.platform_api_key === 'string' &&
+      config.ai_providers.config.platform_api_key.trim()
+        ? config.ai_providers.config.platform_api_key.trim()
+        : null)
+
+    if (!apiKey) {
+      throw new Error('No API key configured for AI provider (tenant or platform)')
+    }
+
+    return apiKey
+  }
+
+  private static resolveModelName(config: any, providerDefault: string): string {
+    const merged = this.resolveMergedProviderConfig(config)
+    const firstModel = Array.isArray(merged.models) ? (merged.models[0] as string | undefined) : undefined
+    const modelFromMerged =
+      (typeof merged.defaultModel === 'string' && merged.defaultModel.trim() ? merged.defaultModel.trim() : null) ||
+      (typeof merged.default_model === 'string' && merged.default_model.trim() ? merged.default_model.trim() : null) ||
+      (typeof merged.model === 'string' && merged.model.trim() ? merged.model.trim() : null) ||
+      (typeof firstModel === 'string' && firstModel.trim() ? firstModel.trim() : null)
+
+    return (config?.model_name as string | null | undefined) || modelFromMerged || providerDefault
+  }
   
   /**
    * Process a document and extract structured data using AI
@@ -78,14 +261,14 @@ export class AIProcessingService {
    * @param documentId - UUID of the document to process
    * @returns Promise<{ success: boolean, validationStatus?: string, validationFlags?: string[], error?: string, statusCode?: number }>
    */
-  static async processDocument(documentId: string): Promise<{ success: boolean, validationStatus?: string, validationFlags?: string[], error?: string, statusCode?: number }> {
+  static async processDocument(documentId: string): Promise<{ success: boolean, validationStatus?: string, validationFlags?: string[], tenantCandidates?: any[], isMultiTenant?: boolean, tenantCorrection?: TenantCorrectionInfo, error?: string, statusCode?: number }> {
     try {
       const supabase = await createClient()
 
       // 1. Get document details
       const { data: document, error: docError } = await supabase
         .from('documents')
-        .select('*, tenants(name, currency)')
+        .select('*, tenants(name, currency, owner_id, locale)')
         .eq('id', documentId)
         .single()
 
@@ -121,6 +304,7 @@ export class AIProcessingService {
       const validationFlags: string[] = []
       let validationStatus = 'PENDING'
       let existingTransactionId: string | null = null
+      let tenantCorrection: TenantCorrectionInfo = { actionTaken: 'NONE' }
 
       if (isDuplicate) {
         validationFlags.push('DUPLICATE_DOCUMENT')
@@ -206,6 +390,9 @@ export class AIProcessingService {
         throw new Error('No active AI provider configured for this tenant or platform')
       }
 
+      // Normalize common provider-specific key variants into our canonical fields
+      extractedData = this.sanitizeExtractedData(extractedData) as ExtractedData
+
       // --- LOG USAGE START ---
       try {
           if (aiConfig?.ai_providers?.id) {
@@ -226,24 +413,39 @@ export class AIProcessingService {
       // --- TENANT VALIDATION START ---
       // Check if tenant name appears in either vendor or customer fields
       const { data: tenant } = await getTenantById(docRow.tenant_id)
+
+      let tenantCandidates: any[] = []
+      let isMultiTenant = false
       
       if (tenant) {
-        const tenantName = String((tenant as { name?: string } | null)?.name || '').toLowerCase()
-        const vendorName = extractedData.vendor_name?.toLowerCase() || ''
-        const customerName = extractedData.customer_name?.toLowerCase() || ''
+        const tenantName = normalizeCompanyName((tenant as { name?: string } | null)?.name || '')
+        const vendorName = normalizeCompanyName(extractedData.vendor_name)
+        const customerName = normalizeCompanyName(extractedData.customer_name)
+
+        tenantDebugLog({
+          documentId,
+          tenantId: docRow.tenant_id,
+          documentType: extractedData.document_type ?? this.inferDocumentType(extractedData),
+          normalized: {
+            tenantName,
+            vendorName,
+            customerName,
+            is_belongs_to_tenant: extractedData.is_belongs_to_tenant,
+          },
+        })
         
         // Check if tenant is involved in the transaction
         // We trust the AI's judgment (is_belongs_to_tenant) if available, otherwise fallback to string matching
         let isTenantMatch = false
         
-        if (typeof extractedData.is_belongs_to_tenant === 'boolean') {
-           isTenantMatch = extractedData.is_belongs_to_tenant
+          if (typeof extractedData.is_belongs_to_tenant === 'boolean') {
+            isTenantMatch = extractedData.is_belongs_to_tenant
         } else {
            // Special handling for Bank Statements
            if (extractedData.document_type === 'bank_statement') {
               // For bank statements, check account holder name if available
-              const accountHolder = extractedData.account_holder_name?.toLowerCase() || ''
-              if (accountHolder && (accountHolder.includes(tenantName) || tenantName.includes(accountHolder))) {
+              const accountHolder = normalizeCompanyName(extractedData.account_holder_name)
+              if (accountHolder && nameIncludes(accountHolder, tenantName)) {
                   isTenantMatch = true
               } else if (extractedData.account_number) {
                   // If we have an account number, check if it matches any of our bank accounts
@@ -255,9 +457,9 @@ export class AIProcessingService {
               
               // Fallback: Check if AI put the name in customer_name or vendor_name by mistake
               if (!isTenantMatch && !accountHolder) {
-                  const vendor = extractedData.vendor_name?.toLowerCase() || ''
-                  const customer = extractedData.customer_name?.toLowerCase() || ''
-                  if (vendor.includes(tenantName) || customer.includes(tenantName)) {
+                  const vendor = vendorName
+                  const customer = customerName
+                  if (nameIncludes(vendor, tenantName) || nameIncludes(customer, tenantName)) {
                       isTenantMatch = true
                   }
               }
@@ -271,28 +473,332 @@ export class AIProcessingService {
               }
            } else {
                // Standard Invoice/Receipt logic
-               const isTenantVendor = vendorName.includes(tenantName) || tenantName.includes(vendorName)
-               const isTenantCustomer = customerName.includes(tenantName) || tenantName.includes(customerName)
+               const isTenantVendor = vendorName && tenantName ? nameIncludes(vendorName, tenantName) : false
+               const isTenantCustomer = customerName && tenantName ? nameIncludes(customerName, tenantName) : false
                isTenantMatch = isTenantVendor || isTenantCustomer
            }
         }
 
+        tenantDebugLog({
+          documentId,
+          tenantId: docRow.tenant_id,
+          decision: { isTenantMatch },
+        })
+
         if (!isTenantMatch) {
-            // If tenant is neither sender nor receiver, it might be a wrong document
-            // UNLESS it's a receipt where customer name might be missing/generic
-            if (extractedData.document_type !== 'receipt') {
-              validationFlags.push('WRONG_TENANT')
-              validationStatus = 'NEEDS_REVIEW'
+            const docType = extractedData.document_type || this.inferDocumentType(extractedData)
+
+            // For receipts, tenant is often not explicitly printed; only flag when we have evidence.
+            // Evidence is: explicit AI boolean says it's not for this tenant, OR customer name exists but doesn't match,
+            // OR both parties exist and neither matches (rare, but strong signal).
+            const hasVendor = vendorName.length >= 2
+            const hasCustomer = customerName.length >= 2
+            const hasExplicitBelongs = typeof extractedData.is_belongs_to_tenant === 'boolean'
+            const explicitMismatch = hasExplicitBelongs && extractedData.is_belongs_to_tenant === false
+            const vendorMatchesTenant = hasVendor ? nameIncludes(vendorName, tenantName) : false
+            const customerMatchesTenant = hasCustomer ? nameIncludes(customerName, tenantName) : false
+            const strongStringMismatch = (hasVendor && hasCustomer && !vendorMatchesTenant && !customerMatchesTenant) || (hasCustomer && !customerMatchesTenant)
+
+            const shouldInvestigateMismatch =
+              docType === 'receipt' ? (explicitMismatch || strongStringMismatch) : (explicitMismatch || hasVendor || hasCustomer)
+
+            tenantDebugLog({
+              documentId,
+              tenantId: docRow.tenant_id,
+              documentType: docType,
+              mismatchSignals: {
+                hasVendor,
+                hasCustomer,
+                explicitMismatch,
+                vendorMatchesTenant,
+                customerMatchesTenant,
+                strongStringMismatch,
+                shouldInvestigateMismatch,
+              },
+            })
+
+            if (shouldInvestigateMismatch) {
               console.log(`Potential wrong tenant detected. Tenant: ${tenantName}`)
+
+              const fromTenantId = docRow.tenant_id
+
+              // Determine accessible tenants + actor role for policy/creation checks
+              const { data: authData } = await supabase.auth.getUser()
+              const actor = authData?.user ?? null
+              let accessibleTenantIds: string[] = []
+              let actorRole: string | null = null
+              if (actor) {
+                const { data: memberships } = await (supabase.from('memberships') as any)
+                  .select('tenant_id, role')
+                  .eq('user_id', actor.id)
+                  .eq('is_active', true)
+
+                const rows = Array.isArray(memberships) ? memberships : []
+                accessibleTenantIds = rows.map((m: any) => m.tenant_id).filter((id: any) => typeof id === 'string')
+                const current = rows.find((m: any) => m.tenant_id === fromTenantId)
+                actorRole = (typeof current?.role === 'string' ? current.role : null) as string | null
+              }
+
+              const policy = await getTenantMismatchPolicy(supabase, fromTenantId)
+
+              // Build tenant candidates list for review/auto-action
+              try {
+                const svc = createService()
+                const matchRes = await findTenantCandidates(extractedData, fromTenantId, accessibleTenantIds)
+                tenantCandidates = matchRes.candidates
+                isMultiTenant = matchRes.isMultiTenant
+
+                if (isMultiTenant) {
+                  tenantCorrection = {
+                    actionTaken: 'SKIPPED_MULTI_TENANT',
+                    fromTenantId,
+                    message: 'Multi-tenant document detected; manual review required.',
+                  }
+                }
+
+                const bestCandidate = [...tenantCandidates].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0]
+                const canAutoReassign =
+                  policy.allow_auto_reassignment === true &&
+                  !isMultiTenant &&
+                  Boolean(bestCandidate?.tenantId) &&
+                  (bestCandidate?.confidence ?? 0) >= policy.min_confidence
+
+                // Auto-reassign to an accessible tenant if confident
+                if (canAutoReassign) {
+                  const toTenantId = String(bestCandidate.tenantId)
+                  const { data: toTenant } = await svc.from('tenants').select('name').eq('id', toTenantId).maybeSingle()
+                  const rpcRes = await rpc('transfer_document_tenant', {
+                    p_document_id: documentId,
+                    p_target_tenant_id: toTenantId,
+                    p_mode: 'MOVE',
+                  })
+
+                  if (rpcRes?.error) {
+                    tenantCorrection = { actionTaken: 'FAILED', fromTenantId, message: rpcRes.error.message }
+                  } else {
+                    // Update in-memory tenant id so subsequent inserts use the correct tenant
+                    ;(document as any).tenant_id = toTenantId
+                    ;(docRow as any).tenant_id = toTenantId
+
+                    tenantCorrection = {
+                      actionTaken: 'REASSIGNED',
+                      fromTenantId,
+                      toTenantId,
+                      toTenantName: toTenant?.name ?? undefined,
+                    }
+                  }
+                }
+
+                // Auto-create tenant (owned by current tenant admin, unless actor is admin)
+                const canAutoCreate =
+                  tenantCorrection.actionTaken === 'NONE' &&
+                  policy.allow_auto_tenant_creation === true &&
+                  !isMultiTenant &&
+                  Boolean(matchRes.suggestedTenantName) &&
+                  actor != null
+
+                if (canAutoCreate) {
+                  const suggestedName = String(matchRes.suggestedTenantName).trim()
+                  const baseSlug = slugifyTenantSlug(suggestedName) || `tenant-${Math.random().toString(36).slice(2, 8)}`
+                  const locale = (docRow.tenants as any)?.locale || 'en'
+                  const currentOwnerId = (docRow.tenants as any)?.owner_id as string | undefined
+                  const ownerId = actorRole === 'COMPANY_ADMIN' ? actor.id : (currentOwnerId ?? actor.id)
+                  const fromTenantCurrency = String((docRow.tenants as any)?.currency || 'USD').toUpperCase()
+                  const detectedCurrency = normalizeCurrencyCode(extractedData.currency) || fromTenantCurrency
+
+                  // Idempotency guard: if a tenant with the same name already exists for this owner,
+                  // reuse it instead of creating another slug variant (common during bulk/parallel processing).
+                  try {
+                    const normalizedSuggested = normalizeCompanyName(suggestedName)
+                    if (normalizedSuggested.length >= 2) {
+                      const { data: existingTenants } = await (svc as any)
+                        .from('tenants')
+                        .select('id, name, slug')
+                        .eq('owner_id', ownerId)
+                        .limit(50)
+
+                      const existing = (Array.isArray(existingTenants) ? existingTenants : []).find((t: any) => {
+                        const n = normalizeCompanyName(t?.name)
+                        return n.length > 0 && n === normalizedSuggested
+                      })
+
+                      if (existing?.id) {
+                        const toTenantId = String(existing.id)
+
+                        // Ensure memberships exist (best-effort)
+                        const inserts: any[] = []
+                        if (ownerId === actor.id) {
+                          inserts.push({ tenant_id: toTenantId, user_id: ownerId, role: 'COMPANY_ADMIN', is_active: true })
+                        } else {
+                          inserts.push({ tenant_id: toTenantId, user_id: ownerId, role: 'COMPANY_ADMIN', is_active: true })
+                          inserts.push({ tenant_id: toTenantId, user_id: actor.id, role: actorRole ?? 'OPERATOR', is_active: true })
+                        }
+
+                        const { error: membershipError } = await (svc.from('memberships') as any).insert(inserts)
+                        if (membershipError && !String(membershipError.message || '').toLowerCase().includes('duplicate')) {
+                          console.warn('Failed to insert memberships for existing tenant:', membershipError)
+                        }
+
+                        const rpcRes = await rpc('transfer_document_tenant', {
+                          p_document_id: documentId,
+                          p_target_tenant_id: toTenantId,
+                          p_mode: 'MOVE',
+                        })
+
+                        if (rpcRes?.error) {
+                          tenantCorrection = { actionTaken: 'FAILED', fromTenantId, message: rpcRes.error.message }
+                        } else {
+                          ;(document as any).tenant_id = toTenantId
+                          ;(docRow as any).tenant_id = toTenantId
+                          tenantCorrection = {
+                            actionTaken: 'REASSIGNED',
+                            fromTenantId,
+                            toTenantId,
+                            toTenantName: existing?.name ?? suggestedName,
+                            message: 'Reused existing tenant (same owner/name).',
+                          }
+                        }
+
+                        tenantDebugLog({
+                          documentId,
+                          tenantId: fromTenantId,
+                          reusedTenant: {
+                            ownerId,
+                            suggestedName,
+                            toTenantId,
+                            toTenantName: existing?.name ?? suggestedName,
+                          },
+                        })
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('Failed to check existing tenants for idempotent creation:', e)
+                  }
+
+                  // If we already reassigned by reusing an existing tenant, stop here.
+                  if (tenantCorrection.actionTaken === 'REASSIGNED') {
+                    // no-op
+                  } else {
+
+                  let createdTenant: any = null
+                  let tenantError: any = null
+
+                  for (let i = 0; i < 3; i++) {
+                    const slug = i === 0 ? baseSlug : `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`
+                    const { data: newTenant, error: createError } = await (svc as any)
+                      .from('tenants')
+                      .insert({
+                        name: suggestedName,
+                        slug,
+                        locale,
+                        owner_id: ownerId,
+                        currency: detectedCurrency,
+                        is_active: true,
+                      })
+                      .select('id, name')
+                      .single()
+
+                    if (createError) {
+                      tenantError = createError
+                      continue
+                    }
+
+                    createdTenant = newTenant
+                    tenantError = null
+                    break
+                  }
+
+                  if (tenantError || !createdTenant?.id) {
+                    const msg = String(tenantError?.message || 'Failed to create tenant')
+                    const looksLikeLimit = msg.toLowerCase().includes('tenant') && msg.toLowerCase().includes('limit')
+                    tenantCorrection = {
+                      actionTaken: looksLikeLimit ? 'LIMIT_REACHED' : 'FAILED',
+                      fromTenantId,
+                      message: msg,
+                    }
+                  } else {
+                    const toTenantId = String(createdTenant.id)
+
+                    // Ensure memberships exist: owner gets admin, actor gets mirrored role
+                    const inserts: any[] = []
+                    if (ownerId === actor.id) {
+                      inserts.push({ tenant_id: toTenantId, user_id: ownerId, role: 'COMPANY_ADMIN', is_active: true })
+                    } else {
+                      inserts.push({ tenant_id: toTenantId, user_id: ownerId, role: 'COMPANY_ADMIN', is_active: true })
+                      inserts.push({ tenant_id: toTenantId, user_id: actor.id, role: actorRole ?? 'OPERATOR', is_active: true })
+                    }
+
+                    const { error: membershipError } = await (svc.from('memberships') as any).insert(inserts)
+                    if (membershipError && !String(membershipError.message || '').toLowerCase().includes('duplicate')) {
+                      console.warn('Failed to insert memberships for new tenant:', membershipError)
+                    }
+
+                    const rpcRes = await rpc('transfer_document_tenant', {
+                      p_document_id: documentId,
+                      p_target_tenant_id: toTenantId,
+                      p_mode: 'MOVE',
+                    })
+
+                    if (rpcRes?.error) {
+                      tenantCorrection = { actionTaken: 'FAILED', fromTenantId, message: rpcRes.error.message }
+                    } else {
+                      ;(document as any).tenant_id = toTenantId
+                      ;(docRow as any).tenant_id = toTenantId
+                      tenantCorrection = {
+                        actionTaken: 'CREATED',
+                        fromTenantId,
+                        toTenantId,
+                        toTenantName: createdTenant?.name ?? suggestedName,
+                      }
+                    }
+                  }
+                  }
+                }
+
+                if (tenantCandidates.length > 0) {
+                  // Persist candidates for the document (best-effort)
+                  await (svc as any)
+                    .from('document_tenant_candidates')
+                    .insert(
+                      tenantCandidates.map((c) => ({
+                        document_id: documentId,
+                        candidate_tenant_id: c.tenantId ?? null,
+                        suggested_tenant_name: matchRes.suggestedTenantName ?? null,
+                        confidence: c.confidence,
+                        reasons: c.reasons ?? []
+                      }))
+                    )
+                }
+              } catch (e) {
+                console.warn('Failed to compute/persist tenant candidates:', e)
+              }
+
+              // If we didn't auto-correct, flag for manual review
+              if (
+                tenantCorrection.actionTaken === 'NONE' ||
+                tenantCorrection.actionTaken === 'SKIPPED_MULTI_TENANT' ||
+                tenantCorrection.actionTaken === 'LIMIT_REACHED' ||
+                tenantCorrection.actionTaken === 'FAILED'
+              ) {
+                validationFlags.push('WRONG_TENANT')
+                validationStatus = 'NEEDS_REVIEW'
+              }
+
+              tenantDebugLog({
+                documentId,
+                tenantId: docRow.tenant_id,
+                tenantCorrection,
+                updatedValidation: {
+                  validationStatus,
+                  validationFlags,
+                },
+              })
               
               // Update flags
-              await supabase
-                .from('documents')
-                .update({
-                  validation_status: validationStatus,
-                  validation_flags: validationFlags
-                })
-                .eq('id', documentId)
+              await updateDocumentById(documentId, {
+                validation_status: validationStatus,
+                validation_flags: validationFlags,
+              })
             }
         }
       }
@@ -343,7 +849,10 @@ export class AIProcessingService {
       return { 
         success: true, 
         validationStatus, 
-        validationFlags 
+        validationFlags,
+        tenantCandidates,
+        isMultiTenant,
+        tenantCorrection
       }
 
     } catch (error: any) {
@@ -500,13 +1009,12 @@ export class AIProcessingService {
     fileBuffer?: Buffer,
     tenantName?: string
   ): Promise<ExtractedData> {
-    const customConfig = config.custom_config || {}
-    // In a real app, you must decrypt the API key
-    const apiKey = config.api_key_encrypted 
+    const customConfig = this.resolveMergedProviderConfig(config)
+    const apiKey = this.resolveApiKey(config)
     
     // Qwen defaults (DashScope)
     const baseURL = customConfig.baseUrl || 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
-    const model = config.model_name || 'qwen-vl-max'
+    const model = this.resolveModelName(config, 'qwen-vl-max')
 
     return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName)
   }
@@ -521,14 +1029,14 @@ export class AIProcessingService {
     fileBuffer?: Buffer,
     tenantName?: string
   ): Promise<ExtractedData> {
-    const customConfig = config.custom_config || {}
-    const apiKey = config.api_key_encrypted
+    const customConfig = this.resolveMergedProviderConfig(config)
+    const apiKey = this.resolveApiKey(config)
     
     // OpenAI defaults
     // If baseUrl is not provided in customConfig, it will be undefined, 
     // which causes the OpenAI SDK to use the default (https://api.openai.com/v1)
     const baseURL = customConfig.baseUrl 
-    const model = config.model_name || 'gpt-4-vision-preview'
+    const model = this.resolveModelName(config, 'gpt-4-vision-preview')
 
     return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName)
   }
@@ -543,12 +1051,12 @@ export class AIProcessingService {
     fileBuffer?: Buffer,
     tenantName?: string
   ): Promise<ExtractedData> {
-    const customConfig = config.custom_config || {}
-    const apiKey = config.api_key_encrypted
+    const customConfig = this.resolveMergedProviderConfig(config)
+    const apiKey = this.resolveApiKey(config)
     
     // OpenRouter defaults
     const baseURL = customConfig.baseUrl || 'https://openrouter.ai/api/v1'
-    const model = config.model_name || 'google/gemini-2.0-flash-exp:free'
+    const model = this.resolveModelName(config, 'google/gemini-2.0-flash-exp:free')
 
     // OpenRouter specific headers
     const extraHeaders = {
@@ -569,12 +1077,12 @@ export class AIProcessingService {
     fileBuffer?: Buffer,
     tenantName?: string
   ): Promise<ExtractedData> {
-    const customConfig = config.custom_config || {}
-    const apiKey = config.api_key_encrypted
+    const customConfig = this.resolveMergedProviderConfig(config)
+    const apiKey = this.resolveApiKey(config)
     
     // DeepSeek defaults
     const baseURL = customConfig.baseUrl || 'https://api.deepseek.com'
-    const model = config.model_name || 'deepseek-chat' 
+    const model = this.resolveModelName(config, 'deepseek-chat')
 
     // Warning: DeepSeek's main models (deepseek-chat) do not support Vision yet.
     // This will likely fail unless the user provides a custom model that supports it.
@@ -779,6 +1287,42 @@ export class AIProcessingService {
     // Map synonyms for bank statements
     if (!data.statement_period_start && data.start_date) data.statement_period_start = data.start_date
     if (!data.statement_period_end && data.end_date) data.statement_period_end = data.end_date
+
+    // Normalize common invoice/receipt party field variants
+    if (!data.vendor_name) {
+      data.vendor_name =
+        data.supplier_name ||
+        data.merchant_name ||
+        data.seller_name ||
+        data.issuer_name ||
+        data.payee_name ||
+        data.vendor ||
+        data.from ||
+        data.sender_name ||
+        data.bill_from ||
+        data.billed_from ||
+        undefined
+    }
+
+    if (!data.customer_name) {
+      data.customer_name =
+        data.receiver_name ||
+        data.buyer_name ||
+        data.customer ||
+        data.bill_to ||
+        data.billed_to ||
+        data.ship_to ||
+        data.to ||
+        data.recipient_name ||
+        undefined
+    }
+
+    // Normalize belongs-to boolean variants
+    if (typeof data.is_belongs_to_tenant !== 'boolean') {
+      if (typeof data.belongs_to_tenant === 'boolean') data.is_belongs_to_tenant = data.belongs_to_tenant
+      else if (typeof data.belongs_to_current_tenant === 'boolean') data.is_belongs_to_tenant = data.belongs_to_current_tenant
+      else if (typeof data.belongs_to_company === 'boolean') data.is_belongs_to_tenant = data.belongs_to_company
+    }
     
     // Opening Balance Synonyms
     if (!data.opening_balance) {
@@ -1277,19 +1821,43 @@ export class AIProcessingService {
       .maybeSingle()
 
     if (tenantConfig) {
-      return tenantConfig
+      // tenant_ai_configurations can be active while its referenced provider is inactive/removed.
+      // Treat that as "no effective config" and fall back to the platform default.
+      const provider = (tenantConfig as any).ai_providers as { id?: string; is_active?: boolean } | null | undefined
+      if (provider?.id && provider.is_active === true) {
+        const platformKey = (tenantConfig as any)?.ai_providers?.config?.platform_api_key
+        const hasTenantKey = typeof (tenantConfig as any)?.api_key_encrypted === 'string' && (tenantConfig as any).api_key_encrypted.trim()
+
+        return {
+          ...(tenantConfig as any),
+          api_key_encrypted: hasTenantKey ? (tenantConfig as any).api_key_encrypted : (platformKey ?? null),
+        }
+      }
     }
 
     // 2. Fallback to a platform-level default provider
-    // Currently we treat the first active provider as the default.
-    // Later, we can add an explicit is_default flag in ai_providers.
-    const { data: defaultProvider } = await supabase
+    // Prefer the provider marked as default in config (config.is_default = true).
+    const { data: configuredDefaultProvider } = await supabase
       .from('ai_providers')
       .select('*')
       .eq('is_active', true)
+      // PostgREST JSON path filter
+      .eq('config->>is_default', 'true')
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle()
+
+    const { data: firstActiveProvider } = configuredDefaultProvider
+      ? { data: null as any }
+      : await supabase
+          .from('ai_providers')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+
+    const defaultProvider = configuredDefaultProvider || firstActiveProvider
 
     if (!defaultProvider) {
       return null
@@ -1299,7 +1867,7 @@ export class AIProcessingService {
     return {
       tenant_id: tenantId,
       ai_provider_id: defaultProvider.id,
-      api_key_encrypted: null,
+      api_key_encrypted: (defaultProvider as any)?.config?.platform_api_key ?? null,
       model_name: null,
       custom_config: defaultProvider.config || {},
       is_active: true,

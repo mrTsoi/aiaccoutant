@@ -23,6 +23,15 @@ interface UploadFile {
   error?: string
   statusMessage?: string
   validationFlags?: string[]
+  tenantCandidates?: Array<{ tenantId?: string; confidence: number; reasons?: string[] }>
+  isMultiTenant?: boolean
+  tenantCorrection?: {
+    actionTaken: 'NONE' | 'REASSIGNED' | 'CREATED' | 'LIMIT_REACHED' | 'SKIPPED_MULTI_TENANT' | 'FAILED'
+    fromTenantId?: string
+    toTenantId?: string
+    toTenantName?: string
+    message?: string
+  }
 }
 
 const ALLOWED_TYPES = [
@@ -184,14 +193,41 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
 
       const needsReview = result.validationStatus === 'NEEDS_REVIEW'
       const flags = result.validationFlags || []
+      const tenantCandidates = Array.isArray(result.tenantCandidates) ? result.tenantCandidates : []
+      const isMultiTenant = Boolean(result.isMultiTenant)
+      const tenantCorrection = (result?.tenantCorrection || { actionTaken: 'NONE' }) as UploadFile['tenantCorrection']
+
+      const hasWrongTenantFlag = flags.includes('WRONG_TENANT')
+      const tenantHint =
+        hasWrongTenantFlag && tenantCandidates.length > 0
+          ? isMultiTenant
+            ? `Tenant mismatch: multiple companies detected (${tenantCandidates.length} matches)`
+            : `Tenant mismatch detected (${tenantCandidates.length} possible match${tenantCandidates.length === 1 ? '' : 'es'})`
+          : null
+
+      const correctionHint =
+        tenantCorrection?.actionTaken === 'REASSIGNED'
+          ? `Moved to ${tenantCorrection?.toTenantName || 'another company'}`
+          : tenantCorrection?.actionTaken === 'CREATED'
+            ? `Created ${tenantCorrection?.toTenantName || 'a new company'} and moved`
+            : tenantCorrection?.actionTaken === 'LIMIT_REACHED'
+              ? 'Tenant limit reached — upgrade to create a new company'
+              : tenantCorrection?.actionTaken === 'FAILED'
+                ? (tenantCorrection?.message || 'Tenant correction failed')
+                : null
 
       setFiles(prev => prev.map(f => 
         f.id === uploadFile.id ? { 
           ...f, 
           status: needsReview ? 'needs_review' : 'success', 
           progress: 100, 
-          statusMessage: needsReview ? `Needs Review: ${flags.join(', ')}` : 'Complete',
-          validationFlags: flags
+          statusMessage: needsReview
+            ? (correctionHint || tenantHint || `Needs Review: ${flags.join(', ')}`)
+            : (correctionHint || 'Complete'),
+          validationFlags: flags,
+          tenantCandidates,
+          isMultiTenant,
+          tenantCorrection
         } : f
       ))
 
