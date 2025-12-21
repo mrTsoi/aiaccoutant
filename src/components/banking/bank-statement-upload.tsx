@@ -71,9 +71,14 @@ export function BankStatementUpload({ accountId, onUploadComplete }: Props) {
       onUploadComplete()
       toast.success(lt('Statement uploaded successfully'))
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error)
-      toast.error(lt('Upload failed'))
+      const msg = String(error?.message || '')
+      if (msg === 'No company selected') {
+        toast.error(lt('No company selected'))
+      } else {
+        toast.error(lt('Upload failed'))
+      }
     } finally {
       setUploading(false)
     }

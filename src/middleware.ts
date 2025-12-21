@@ -13,9 +13,19 @@ const intlMiddleware = createMiddleware({
 export async function middleware(request: NextRequest) {
   // Legacy locale redirect: zh-TW -> zh-HK
   if (request.nextUrl.pathname === '/zh-TW' || request.nextUrl.pathname.startsWith('/zh-TW/')) {
-    const url = request.nextUrl.clone()
-    url.pathname = url.pathname.replace(/^\/zh-TW(\/|$)/, '/zh-HK$1')
-    return NextResponse.redirect(url)
+    const url = request.nextUrl.clone();
+    url.pathname = url.pathname.replace(/^\/zh-TW(\/|$)/, '/zh-HK$1');
+    // Force public domain for redirect
+    const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SITE_URL || 'https://ledgerai.sophiesofts.com';
+    try {
+      const { host, protocol } = new URL(PUBLIC_DOMAIN);
+      url.host = host;
+      url.protocol = protocol;
+    } catch {
+      url.host = PUBLIC_DOMAIN.replace(/^https?:\/\//, '');
+      url.protocol = PUBLIC_DOMAIN.startsWith('https') ? 'https:' : 'http:';
+    }
+    return NextResponse.redirect(url);
   }
 
   // 1. Run next-intl middleware to handle locale routing
