@@ -15,8 +15,13 @@ export async function uploadDocumentViaApi(params: {
   documentType?: string | null
   bankAccountId?: string | null
 }): Promise<UploadDocumentResponse> {
+  const tenantId = String(params.tenantId || '').trim()
+  if (!tenantId || tenantId === 'undefined' || tenantId === 'null') {
+    throw new Error('No company selected')
+  }
+
   const form = new FormData()
-  form.set('tenantId', params.tenantId)
+  form.set('tenantId', tenantId)
   form.set('file', params.file)
   if (params.documentType) form.set('documentType', params.documentType)
   if (params.bankAccountId) form.set('bankAccountId', params.bankAccountId)

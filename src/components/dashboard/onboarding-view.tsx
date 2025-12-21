@@ -187,8 +187,9 @@ export function OnboardingView() {
       
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || lt('Failed to create company'))
-      
-      const tenantId = json.id
+
+      const tenantId = String(json?.tenant?.id || '')
+      if (!tenantId) throw new Error(lt('Failed to create company'))
 
       const uploaded = await uploadDocumentViaApi({ tenantId, file: uploadFile })
       const documentId = uploaded.documentId
@@ -209,7 +210,12 @@ export function OnboardingView() {
       
     } catch (error: any) {
       console.error('Error:', error)
-      toast.error(error.message || lt('Something went wrong'))
+      const msg = String(error?.message || '')
+      if (msg === 'No company selected') {
+        toast.error(lt('No company selected'))
+      } else {
+        toast.error(msg || lt('Something went wrong'))
+      }
     } finally {
       setCreating(false)
     }
