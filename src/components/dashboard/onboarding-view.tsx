@@ -223,6 +223,12 @@ export function OnboardingView() {
 
   return (
     <div className="container mx-auto py-10 max-w-5xl">
+      {creating && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+          <span className="text-lg font-medium text-primary">{lt('Processing...')}</span>
+        </div>
+      )}
       <div className="text-center mb-10">
         <h1 className="text-4xl font-bold mb-4">{lt('Welcome to LedgerAI')}</h1>
         <p className="text-xl text-muted-foreground">

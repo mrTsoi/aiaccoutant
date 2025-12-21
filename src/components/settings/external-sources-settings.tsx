@@ -1,4 +1,6 @@
-'use client'
+  // Track token error state for each source
+  "use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -63,6 +65,7 @@ export function ExternalSourcesSettings() {
       }
     >
   >({})
+  const [tokenErrorById, setTokenErrorById] = useState<Record<string, string>>({})
 
   const [cronConfigured, setCronConfigured] = useState<boolean>(false)
   const [cronEnabled, setCronEnabled] = useState<boolean>(true)
@@ -241,6 +244,13 @@ export function ExternalSourcesSettings() {
     fetchStatuses()
   }, [fetchStatuses])
 
+  // Helper to trigger reconnect (moved to component scope)
+  const handleReconnect = async (source: SourceRow) => {
+    await disconnectSource(source.id)
+    await connectSource(source)
+    await fetchCloudWhoAmI()
+  }
+
   const fetchCloudWhoAmI = useCallback(async () => {
     if (!canManage) return
     const cloud = sources.filter((s) => s.provider === 'GOOGLE_DRIVE' || s.provider === 'ONEDRIVE')
@@ -250,22 +260,33 @@ export function ExternalSourcesSettings() {
     }
 
     try {
-      const entries = await Promise.all(
-        cloud.map(async (s) => {
+      const entries: [string, any][] = []
+      const tokenErrors: Record<string, string> = {}
+      for (const s of cloud) {
+        try {
           const res = await fetch(`/api/external-sources/whoami?source_id=${encodeURIComponent(s.id)}`)
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) return [s.id, null] as const
-          return [
+          if (!res.ok) {
+            // Detect token error
+            if (json?.error && /token has been expired|token has been revoked|refresh token/i.test(json.error)) {
+              tokenErrors[s.id] = lt('Token expired or revoked. Please reconnect.')
+            }
+            entries.push([s.id, null])
+            continue
+          }
+          entries.push([
             s.id,
             {
               account: json.account || null,
               folder_id: json.folder_id ?? null,
               folder_name: json.folder_name ?? null,
             },
-          ] as const
-        })
-      )
-
+          ])
+        } catch (err: any) {
+          entries.push([s.id, null])
+        }
+      }
+      setTokenErrorById(tokenErrors)
       setCloudInfoById(Object.fromEntries(entries.filter((e) => e[1] !== null)) as typeof cloudInfoById)
     } catch {
       // ignore
@@ -760,6 +781,9 @@ export function ExternalSourcesSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+            <b>{lt('Important for Google Drive & OneDrive:')}</b> {lt('Scheduled jobs for Google Drive and Microsoft OneDrive require a valid OAuth connection. If the connection is revoked, expires, or the user changes their password, scheduled imports will stop until you reconnect. Refresh tokens for Google Drive usually last indefinitely unless revoked, while OneDrive tokens may expire after 90 days of inactivity. SFTP/FTPS scheduled jobs are not affected by these limitations.')}
+          </div>
           {!canManage ? (
             <div className="text-sm text-muted-foreground">{lt('Only Company Admins can manage external sources.')}</div>
           ) : (
@@ -854,6 +878,14 @@ export function ExternalSourcesSettings() {
                                   </span>
                                 </>
                               ) : null}
+                              {tokenErrorById[wizardSourceId] && (
+                                <div className="mt-2 text-red-600 flex items-center gap-2">
+                                  <span>{lt('Google Drive access has expired or been revoked. Please reconnect.')}</span>
+                                  <Button size="sm" variant="destructive" onClick={() => handleReconnect(wizardSource!)}>
+                                    {lt('Reconnect')}
+                                  </Button>
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex flex-wrap gap-2">
@@ -1234,6 +1266,15 @@ export function ExternalSourcesSettings() {
                   </div>
                 </div>
 
+                {/* Cloud storage token/session error notification */}
+                {isCloud(s) && tokenErrorById[s.id] && (
+                  <div className="rounded bg-red-50 border border-red-200 p-2 text-sm text-red-800 flex items-center gap-2 mb-2">
+                    <span>{lt('Cloud storage access for this source has expired or been revoked. Scheduled jobs and manual imports will not work until you reconnect.')}</span>
+                    <Button size="sm" variant="destructive" onClick={() => handleReconnect(s)}>
+                      {lt('Reconnect')}
+                    </Button>
+                  </div>
+                )}
                 {pickerSourceId === s.id ? (
                   <div className="rounded-md border bg-muted/30 p-3 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
