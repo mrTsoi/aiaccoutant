@@ -421,7 +421,7 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
                         file.status === 'needs_review' ? "text-yellow-600 font-medium" :
                         "text-gray-500"
                       }>
-                        {file.error || file.statusMessage}
+                        {lt(file.error || '') || lt(file.statusMessage || '')}
                       </span>
                       <span className="text-gray-400">{file.progress}%</span>
                     </div>

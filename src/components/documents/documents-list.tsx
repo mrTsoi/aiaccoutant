@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { ImagePreview } from '@/components/ui/image-preview'
 import { useLiterals } from '@/hooks/use-literals'
+import { TenantSettings } from '../settings/tenant-settings'
 
 type Document = Database['public']['Tables']['documents']['Row'] & {
   document_data?: {
@@ -840,8 +841,9 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
                         <div className="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full" title={doc.validation_flags?.join(', ')}>
                           <AlertTriangle className="w-3 h-3" />
                           <span>
-                            {doc.validation_flags?.includes('DUPLICATE_DOCUMENT') ? lt('Duplicate') : 
-                             doc.validation_flags?.includes('WRONG_TENANT') ? lt('Wrong Tenant') : lt('Review Needed')}
+                            {doc.validation_flags?.includes('DUPLICATE_DOCUMENT') ? ltVars('Duplicate  ') : ''}
+                            {doc.validation_flags?.includes('WRONG_TENANT') ? ltVars('Wrong Tenant ') : ''} 
+                            {doc.validation_flags?.includes('Review Needed') ? ltVars('Review Needed') : ''} 
                           </span>
                         </div>
                       )}
@@ -856,6 +858,52 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
                           <span className="capitalize">{docTypeLables[doc.document_type?.toLowerCase()] || doc.document_type}</span>
                         </>
                       )}
+                      
+                      {(() => {
+                        const data = getDocData(doc)
+                        if (doc.document_type === 'BANK_STATEMENT' && data?.extracted_data?.bank_transactions?.length > 0) {
+                           return (
+                             <>
+                              <span className="hidden md:inline">•</span>
+                              <span>{ltVars('{count} Txns', { count: data.extracted_data.bank_transactions.length })}</span>
+                             </>
+                           )
+                        }
+                     
+                        if (data?.extracted_data?.vendor_name != null) {
+                          return (
+                            <>
+                              <span className="hidden md:inline">•</span>
+                              <span>{ltVars('Vendor: {vendor}', { vendor: data.extracted_data.vendor_name })}</span>
+                            </>
+                          )
+                        }else if (data?.extracted_data?.customer_name != null) {
+                          return (
+                            <>
+                              <span className="hidden md:inline">•</span>
+                              <span>{ltVars('Customer: {customer}', { customer: data.extracted_data.customer_name })}</span>
+                            </>
+                          )
+                        }
+                        
+                        return null
+                      })()}
+
+                      {(() => {
+                        const data = getDocData(doc)
+                        
+                        if (data?.extracted_data?.total_amount != null) {
+                          return (
+                            <>
+                              <span className="hidden md:inline">•</span>
+                              <span>{ltVars('Total: {amount} {currency}', { amount: data.extracted_data.total_amount, currency: data.extracted_data?.currency_code || '' })}</span>
+                            </>
+                          )
+                        }
+                        
+                        return null
+                      })()}
+
                       {(() => {
                         const data = getDocData(doc)
                         if (data?.confidence_score != null) {
@@ -875,18 +923,6 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
                               </div>
                             </>
                           )
-                        }
-                        return null
-                      })()}
-                      {(() => {
-                        const data = getDocData(doc)
-                        if (doc.document_type === 'BANK_STATEMENT' && data?.extracted_data?.bank_transactions?.length > 0) {
-                           return (
-                             <>
-                              <span className="hidden md:inline">•</span>
-                              <span>{ltVars('{count} Txns', { count: data.extracted_data.bank_transactions.length })}</span>
-                             </>
-                           )
                         }
                         return null
                       })()}
