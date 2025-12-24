@@ -91,7 +91,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+
+  // Enforce tenant_id for all non-global/cron requests (tenant isolation)
   if (!hasCronAuth && user) {
+    if (!body.tenant_id) {
+      return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 })
+    }
     try {
       const ok = await userHasFeature(supabase as any, user.id, 'ai_access')
       if (!ok) {

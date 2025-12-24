@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { useLiterals } from '@/hooks/use-literals'
 
 type Provider = 'SFTP' | 'FTPS' | 'GOOGLE_DRIVE' | 'ONEDRIVE'
 
@@ -39,6 +40,7 @@ type FileItem = {
 }
 
 export function ExternalSourcesSettings() {
+  const lt = useLiterals()
   const { currentTenant } = useTenant()
   const role = useUserRole()
   const canManage = role === 'COMPANY_ADMIN' || role === 'SUPER_ADMIN'
@@ -61,6 +63,7 @@ export function ExternalSourcesSettings() {
       }
     >
   >({})
+  const [tokenErrorById, setTokenErrorById] = useState<Record<string, string>>({})
 
   const [cronConfigured, setCronConfigured] = useState<boolean>(false)
   const [cronEnabled, setCronEnabled] = useState<boolean>(true)
@@ -152,14 +155,14 @@ export function ExternalSourcesSettings() {
       setLoading(true)
       const res = await fetch(`/api/external-sources?tenant_id=${encodeURIComponent(tenantId)}`)
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to load sources')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to load sources'))
       setSources(json.data || [])
     } catch (e: any) {
-      toast.error(e.message || 'Failed to load external sources')
+      toast.error(e?.message ? lt('Failed to load external sources: {message}', { message: e.message }) : lt('Failed to load external sources'))
     } finally {
       setLoading(false)
     }
-  }, [tenantId, canManage])
+  }, [tenantId, canManage, lt])
 
   const fetchCronConfig = useCallback(async () => {
     if (!tenantId || !canManage) return
@@ -167,7 +170,7 @@ export function ExternalSourcesSettings() {
     try {
       const res = await fetch(`/api/external-sources/cron?tenant_id=${encodeURIComponent(tenantId)}`)
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to load cron config')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to load cron config'))
 
       if (!json.configured) {
         setCronConfigured(false)
@@ -184,13 +187,14 @@ export function ExternalSourcesSettings() {
     } catch {
       // ignore
     }
-  }, [tenantId, canManage])
+  }, [tenantId, canManage, lt])
 
   const fetchBankAccounts = useCallback(async () => {
     if (!tenantId || !canManage) return
 
     try {
-      const { data, error } = await (supabase.from('bank_accounts') as any)
+      const { data, error } = await supabase
+        .from('bank_accounts')
         .select('id, account_name, bank_name')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
@@ -238,6 +242,13 @@ export function ExternalSourcesSettings() {
     fetchStatuses()
   }, [fetchStatuses])
 
+  // Helper to trigger reconnect (moved to component scope)
+  const handleReconnect = async (source: SourceRow) => {
+    await disconnectSource(source.id)
+    await connectSource(source)
+    await fetchCloudWhoAmI()
+  }
+
   const fetchCloudWhoAmI = useCallback(async () => {
     if (!canManage) return
     const cloud = sources.filter((s) => s.provider === 'GOOGLE_DRIVE' || s.provider === 'ONEDRIVE')
@@ -247,27 +258,38 @@ export function ExternalSourcesSettings() {
     }
 
     try {
-      const entries = await Promise.all(
-        cloud.map(async (s) => {
+      const entries: [string, any][] = []
+      const tokenErrors: Record<string, string> = {}
+      for (const s of cloud) {
+        try {
           const res = await fetch(`/api/external-sources/whoami?source_id=${encodeURIComponent(s.id)}`)
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) return [s.id, null] as const
-          return [
+          if (!res.ok) {
+            // Detect token error
+            if (json?.error && /token has been expired|token has been revoked|refresh token/i.test(json.error)) {
+              tokenErrors[s.id] = lt('Token expired or revoked. Please reconnect.')
+            }
+            entries.push([s.id, null])
+            continue
+          }
+          entries.push([
             s.id,
             {
               account: json.account || null,
               folder_id: json.folder_id ?? null,
               folder_name: json.folder_name ?? null,
             },
-          ] as const
-        })
-      )
-
-      setCloudInfoById(Object.fromEntries(entries.filter((e) => e[1] !== null)) as any)
+          ])
+        } catch (err: any) {
+          entries.push([s.id, null])
+        }
+      }
+      setTokenErrorById(tokenErrors)
+      setCloudInfoById(Object.fromEntries(entries.filter((e) => e[1] !== null)) as typeof cloudInfoById)
     } catch {
       // ignore
     }
-  }, [sources, canManage])
+  }, [sources, canManage, lt])
 
   useEffect(() => {
     fetchCloudWhoAmI()
@@ -290,14 +312,14 @@ export function ExternalSourcesSettings() {
       })
 
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to rotate cron secret')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to rotate cron secret'))
 
       setGeneratedCronSecret(json.cron_secret)
       setCronKeyPrefix(json.key_prefix || null)
       setCronConfigured(true)
-      toast.success('Cron secret rotated')
+      toast.success(lt('Cron secret rotated'))
     } catch (e: any) {
-      toast.error(e.message || 'Failed to rotate cron secret')
+      toast.error(e?.message ? lt('Failed to rotate cron secret: {message}', { message: e.message }) : lt('Failed to rotate cron secret'))
     } finally {
       setWorking(false)
     }
@@ -317,11 +339,11 @@ export function ExternalSourcesSettings() {
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to save cron config')
-      toast.success('Cron configuration saved')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to save cron config'))
+      toast.success(lt('Cron configuration saved'))
       await fetchCronConfig()
     } catch (e: any) {
-      toast.error(e.message || 'Failed to save cron config')
+      toast.error(e?.message ? lt('Failed to save cron config: {message}', { message: e.message }) : lt('Failed to save cron config'))
     } finally {
       setWorking(false)
     }
@@ -331,9 +353,9 @@ export function ExternalSourcesSettings() {
     if (!generatedCronSecret) return
     try {
       await navigator.clipboard.writeText(generatedCronSecret)
-      toast.success('Copied cron secret')
+      toast.success(lt('Copied cron secret'))
     } catch {
-      toast.error('Failed to copy')
+      toast.error(lt('Failed to copy'))
     }
   }
 
@@ -363,18 +385,18 @@ export function ExternalSourcesSettings() {
           `/api/external-sources/folders?source_id=${encodeURIComponent(sourceId)}&parent_id=${encodeURIComponent(parentId)}`
         )
         const json = await res.json()
-        if (!res.ok) throw new Error(json?.error || 'Failed to load folders')
+        if (!res.ok) throw new Error(json?.error || lt('Failed to load folders'))
         setPickerFolders((json.folders || []) as FolderItem[])
         setPickerFiles((json.files || []) as FileItem[])
       } catch (e: any) {
-        toast.error(e.message || 'Failed to load folders')
+        toast.error(e?.message ? lt('Failed to load folders: {message}', { message: e.message }) : lt('Failed to load folders'))
         setPickerFolders([])
         setPickerFiles([])
       } finally {
         setPickerLoading(false)
       }
     },
-    []
+    [lt]
   )
 
   const openFolderPicker = async (s: SourceRow) => {
@@ -437,15 +459,15 @@ export function ExternalSourcesSettings() {
       })
 
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to save folder')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to save folder'))
 
-      toast.success('Folder selected')
+      toast.success(lt('Folder selected'))
 
       setSources((prev) =>
         prev.map((row) => (row.id === s.id ? { ...row, config: nextConfig } : row))
       )
     } catch (e: any) {
-      toast.error(e.message || 'Failed to save folder')
+      toast.error(e?.message ? lt('Failed to save folder: {message}', { message: e.message }) : lt('Failed to save folder'))
     } finally {
       setWorking(false)
       closeFolderPicker()
@@ -455,7 +477,7 @@ export function ExternalSourcesSettings() {
   const upsertSource = async (override?: { id?: string; enabled?: boolean }) => {
     if (!tenantId) return
     if (!name.trim()) {
-      toast.error('Name is required')
+      toast.error(lt('Name is required'))
       return
     }
 
@@ -512,9 +534,9 @@ export function ExternalSourcesSettings() {
       })
 
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Failed to save')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to save'))
 
-      toast.success('Saved external source')
+      toast.success(lt('Saved external source'))
       setName('')
       setHost('')
       setPort('')
@@ -532,7 +554,7 @@ export function ExternalSourcesSettings() {
       await fetchSources()
       return json?.id as string | undefined
     } catch (e: any) {
-      toast.error(e.message || 'Failed to save')
+      toast.error(e?.message ? lt('Failed to save: {message}', { message: e.message }) : lt('Failed to save'))
       return undefined
     } finally {
       setWorking(false)
@@ -551,11 +573,11 @@ export function ExternalSourcesSettings() {
       persistWizard({ open: true, step: wizardStep, sourceId: s.id })
       const res = await fetch(startPath)
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || 'Failed to start OAuth')
-      if (!json?.auth_url) throw new Error('OAuth URL not returned')
+      if (!res.ok) throw new Error(json?.error || lt('Failed to start OAuth'))
+      if (!json?.auth_url) throw new Error(lt('OAuth URL not returned'))
       window.location.href = String(json.auth_url)
     } catch (e: any) {
-      toast.error(e.message || 'Failed to start OAuth')
+      toast.error(e?.message ? lt('Failed to start OAuth: {message}', { message: e.message }) : lt('Failed to start OAuth'))
     } finally {
       setWorking(false)
     }
@@ -608,7 +630,7 @@ export function ExternalSourcesSettings() {
         if (!wizardSourceId) return
         const connected = statusById[wizardSourceId]
         if (!connected) {
-          toast.error('Please connect the account first')
+          toast.error(lt('Please connect the account first'))
           return
         }
       }
@@ -625,7 +647,7 @@ export function ExternalSourcesSettings() {
 
       // Cloud providers need a folder selected
       if ((provider === 'GOOGLE_DRIVE' || provider === 'ONEDRIVE') && !(folderId || wizardSource?.config?.folder_id)) {
-        toast.error('Please select a folder')
+        toast.error(lt('Please select a folder'))
         return
       }
 
@@ -636,16 +658,16 @@ export function ExternalSourcesSettings() {
   }
 
   const wizardBack = () => {
-    const prev = wizardStep === 1 ? 1 : ((wizardStep - 1) as any)
-    setWizardStep(prev)
-    persistWizard({ open: true, step: prev })
+    const prev = wizardStep === 1 ? 1 : wizardStep - 1
+    setWizardStep(prev as 1 | 2 | 3 | 4)
+    persistWizard({ open: true, step: prev as 1 | 2 | 3 | 4 })
   }
 
   const wizardFinish = async () => {
     if (!wizardSourceId) return
     const savedId = await saveWizardSource({ enabled: true })
     if (!savedId) return
-    toast.success('External source is ready')
+    toast.success(lt('External source is ready'))
     resetWizard()
     await fetchSources()
   }
@@ -659,18 +681,18 @@ export function ExternalSourcesSettings() {
         body: JSON.stringify({ source_id: sourceId }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Disconnect failed')
-      toast.success('Disconnected')
+        if (!res.ok) throw new Error(json?.error || lt('Disconnect failed'))
+        toast.success(lt('Disconnected'))
       await fetchStatuses()
     } catch (e: any) {
-      toast.error(e.message || 'Disconnect failed')
+        toast.error(e?.message ? lt('Disconnect failed: {message}', { message: e.message }) : lt('Disconnect failed'))
     } finally {
       setWorking(false)
     }
   }
 
   const deleteSource = async (sourceId: string) => {
-    if (!confirm('Delete this external source? This will remove its configuration and any import history.')) return
+    if (!confirm(lt('Delete this external source? This will remove its configuration and any import history.'))) return
 
     try {
       setWorking(true)
@@ -680,18 +702,18 @@ export function ExternalSourcesSettings() {
         body: JSON.stringify({ source_id: sourceId }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || 'Delete failed')
+      if (!res.ok) throw new Error(json?.error || lt('Delete failed'))
 
       if (pickerSourceId === sourceId) {
         closeFolderPicker()
       }
 
-      toast.success('Deleted external source')
+      toast.success(lt('Deleted external source'))
       await fetchSources()
       await fetchStatuses()
       await fetchCloudWhoAmI()
     } catch (e: any) {
-      toast.error(e.message || 'Delete failed')
+      toast.error(e?.message ? lt('Delete failed: {message}', { message: e.message }) : lt('Delete failed'))
     } finally {
       setWorking(false)
     }
@@ -706,10 +728,10 @@ export function ExternalSourcesSettings() {
         body: JSON.stringify({ source_id: sourceId }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Test failed')
-      toast.success(`Connected. Found ${json.list?.length ?? 0} file(s).`)
+        if (!res.ok) throw new Error(json?.error || lt('Test failed'))
+        toast.success(lt('Connected. Found {count} file(s).', { count: json.list?.length ?? 0 }))
     } catch (e: any) {
-      toast.error(e.message || 'Test failed')
+        toast.error(e?.message ? lt('Test failed: {message}', { message: e.message }) : lt('Test failed'))
     } finally {
       setWorking(false)
     }
@@ -726,11 +748,11 @@ export function ExternalSourcesSettings() {
         body: JSON.stringify({ tenant_id: tenantId, source_id: sourceId, limit: 10 }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Run failed')
-      toast.success(`Run complete. Imported ${json.inserted ?? 0} file(s).`)
+        if (!res.ok) throw new Error(json?.error || lt('Run failed'))
+        toast.success(lt('Run complete. Imported {count} file(s).', { count: json.inserted ?? 0 }))
       await fetchSources()
     } catch (e: any) {
-      toast.error(e.message || 'Run failed')
+        toast.error(e?.message ? lt('Run failed: {message}', { message: e.message }) : lt('Run failed'))
     } finally {
       setWorking(false)
     }
@@ -740,8 +762,8 @@ export function ExternalSourcesSettings() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>External Sources</CardTitle>
-          <CardDescription>Select a tenant first.</CardDescription>
+          <CardTitle>{lt('External Sources')}</CardTitle>
+          <CardDescription>{lt('Select a tenant first.')}</CardDescription>
         </CardHeader>
       </Card>
     )
@@ -751,32 +773,35 @@ export function ExternalSourcesSettings() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>External Sources</CardTitle>
+          <CardTitle>{lt('External Sources')}</CardTitle>
           <CardDescription>
-            Schedule automatic document ingestion from SFTP/FTPS and cloud drives.
+            {lt('Schedule automatic document ingestion from SFTP/FTPS and cloud drives.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+            <b>{lt('Important for Google Drive & OneDrive:')}</b> {lt('Scheduled jobs for Google Drive and Microsoft OneDrive require a valid OAuth connection. If the connection is revoked, expires, or the user changes their password, scheduled imports will stop until you reconnect. Refresh tokens for Google Drive usually last indefinitely unless revoked, while OneDrive tokens may expire after 90 days of inactivity. SFTP/FTPS scheduled jobs are not affected by these limitations.')}
+          </div>
           {!canManage ? (
-            <div className="text-sm text-muted-foreground">Only Company Admins can manage external sources.</div>
+            <div className="text-sm text-muted-foreground">{lt('Only Company Admins can manage external sources.')}</div>
           ) : (
             <>
               <div className="rounded-md border p-3 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm">
-                    <div className="font-medium">Setup Wizard</div>
+                    <div className="font-medium">{lt('Setup Wizard')}</div>
                     <div className="text-muted-foreground">
-                      A guided setup flow to help you connect the correct account and verify what will be imported.
+                      {lt('A guided setup flow to help you connect the correct account and verify what will be imported.')}
                     </div>
                   </div>
                   <div className="flex gap-2">
                     {!wizardOpen ? (
                       <Button onClick={startWizard} disabled={working || loading}>
-                        Start Wizard
+                        {lt('Start Wizard')}
                       </Button>
                     ) : (
                       <Button variant="outline" onClick={resetWizard} disabled={working}>
-                        Cancel
+                        {lt('Cancel')}
                       </Button>
                     )}
                   </div>
@@ -785,25 +810,25 @@ export function ExternalSourcesSettings() {
                 {wizardOpen ? (
                   <div className="space-y-4">
                     <div className="text-sm text-muted-foreground">
-                      Step {wizardStep} of 4
+                      {lt('Step {step} of {total}', { step: wizardStep, total: 4 })}
                     </div>
 
                     {wizardStep === 1 ? (
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label htmlFor="wiz-name">Source name</Label>
+                          <Label htmlFor="wiz-name">{lt('Source name')}</Label>
                           <Input
                             id="wiz-name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g. Finance Google Drive"
+                            placeholder={lt('e.g. Finance Google Drive')}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Provider</Label>
+                          <Label>{lt('Provider')}</Label>
                           <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select provider" />
+                              <SelectValue placeholder={lt('Select provider')} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="SFTP">SFTP (SSH)</SelectItem>
@@ -815,7 +840,7 @@ export function ExternalSourcesSettings() {
                         </div>
 
                         <div className="md:col-span-2 text-xs text-muted-foreground">
-                          Tip: for cloud drives, this wizard will show “Connected as” so you can confirm the exact account being used.
+                          {lt('Tip: for cloud drives, this wizard will show “Connected as” so you can confirm the exact account being used.')}
                         </div>
                       </div>
                     ) : null}
@@ -823,38 +848,48 @@ export function ExternalSourcesSettings() {
                     {wizardStep === 2 ? (
                       <div className="space-y-3">
                         {!wizardSourceId ? (
-                          <div className="text-sm text-muted-foreground">Creating the source…</div>
+                          <div className="text-sm text-muted-foreground">{lt('Creating the source…')}</div>
                         ) : provider === 'GOOGLE_DRIVE' || provider === 'ONEDRIVE' ? (
                           <div className="space-y-3">
                             <div className="text-sm">
-                              <div className="font-medium">Connect account</div>
+                              <div className="font-medium">{lt('Connect account')}</div>
                               <div className="text-muted-foreground">
-                                This decides which {provider === 'GOOGLE_DRIVE' ? 'Google Drive' : 'OneDrive'} will be accessed.
+                                {lt('This decides which {drive} will be accessed.', {
+                                  drive: provider === 'GOOGLE_DRIVE' ? 'Google Drive' : 'OneDrive',
+                                })}
                               </div>
                             </div>
 
                             <div className="rounded-md bg-muted p-3 text-sm">
-                              Status:{' '}
+                              {lt('Status:')}{' '}
                               {statusById[wizardSourceId] ? (
-                                <span className="font-medium">connected</span>
+                                <span className="font-medium">{lt('connected')}</span>
                               ) : (
-                                <span className="font-medium">not connected</span>
+                                <span className="font-medium">{lt('not connected')}</span>
                               )}
                               {cloudInfoById[wizardSourceId]?.account?.email || cloudInfoById[wizardSourceId]?.account?.displayName ? (
                                 <>
                                   {' '}
-                                  • Connected as{' '}
+                                  • {lt('Connected as')}{' '}
                                   <span className="font-medium">
                                     {cloudInfoById[wizardSourceId]?.account?.email || cloudInfoById[wizardSourceId]?.account?.displayName}
                                   </span>
                                 </>
                               ) : null}
+                              {tokenErrorById[wizardSourceId] && (
+                                <div className="mt-2 text-red-600 flex items-center gap-2">
+                                  <span>{lt('Google Drive access has expired or been revoked. Please reconnect.')}</span>
+                                  <Button size="sm" variant="destructive" onClick={() => handleReconnect(wizardSource!)}>
+                                    {lt('Reconnect')}
+                                  </Button>
+                                </div>
+                              )}
                             </div>
 
                             <div className="flex flex-wrap gap-2">
                               {statusById[wizardSourceId] ? (
                                 <Button variant="outline" onClick={() => disconnectSource(wizardSourceId)} disabled={working}>
-                                  Disconnect
+                                  {lt('Disconnect')}
                                 </Button>
                               ) : (
                                 <Button
@@ -870,42 +905,42 @@ export function ExternalSourcesSettings() {
                                   })}
                                   disabled={working}
                                 >
-                                  Connect
+                                  {lt('Connect')}
                                 </Button>
                               )}
                             </div>
 
                             <div className="text-xs text-muted-foreground">
-                              Your OAuth app must allow redirect URI:{' '}
+                              {lt('Your OAuth app must allow redirect URI:')}{' '}
                               <span className="font-mono">{window.location.origin}/api/external-sources/oauth/{provider === 'GOOGLE_DRIVE' ? 'google' : 'microsoft'}/callback</span>
                             </div>
                           </div>
                         ) : (
                           <div className="grid gap-3 md:grid-cols-2">
                             <div className="space-y-2">
-                              <Label htmlFor="ext-host">Host</Label>
+                              <Label htmlFor="ext-host">{lt('Host')}</Label>
                               <Input id="ext-host" value={host} onChange={(e) => setHost(e.target.value)} placeholder="sftp.example.com" />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="ext-port">Port</Label>
+                              <Label htmlFor="ext-port">{lt('Port')}</Label>
                               <Input id="ext-port" value={port} onChange={(e) => setPort(e.target.value)} placeholder={provider === 'SFTP' ? '22' : '21'} />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="ext-path">Remote Path</Label>
+                              <Label htmlFor="ext-path">{lt('Remote Path')}</Label>
                               <Input id="ext-path" value={remotePath} onChange={(e) => setRemotePath(e.target.value)} placeholder="/" />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="ext-user">Username</Label>
+                              <Label htmlFor="ext-user">{lt('Username')}</Label>
                               <Input id="ext-user" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="ext-pass">Password (optional)</Label>
+                              <Label htmlFor="ext-pass">{lt('Password (optional)')}</Label>
                               <Input id="ext-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                             </div>
 
                             {provider === 'SFTP' ? (
                               <div className="space-y-2 md:col-span-2">
-                                <Label htmlFor="ext-key">SSH Private Key PEM (optional)</Label>
+                                <Label htmlFor="ext-key">{lt('SSH Private Key PEM (optional)')}</Label>
                                 <Textarea id="ext-key" value={privateKeyPem} onChange={(e) => setPrivateKeyPem(e.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" />
                               </div>
                             ) : null}
@@ -913,15 +948,15 @@ export function ExternalSourcesSettings() {
                             {provider === 'FTPS' ? (
                               <>
                                 <div className="space-y-2 md:col-span-2">
-                                  <Label htmlFor="ftps-cert">Client Certificate PEM (mTLS optional)</Label>
+                                  <Label htmlFor="ftps-cert">{lt('Client Certificate PEM (mTLS optional)')}</Label>
                                   <Textarea id="ftps-cert" value={clientCertPem} onChange={(e) => setClientCertPem(e.target.value)} placeholder="-----BEGIN CERTIFICATE-----" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                  <Label htmlFor="ftps-key">Client Key PEM (mTLS optional)</Label>
+                                  <Label htmlFor="ftps-key">{lt('Client Key PEM (mTLS optional)')}</Label>
                                   <Textarea id="ftps-key" value={clientKeyPem} onChange={(e) => setClientKeyPem(e.target.value)} placeholder="-----BEGIN PRIVATE KEY-----" />
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
-                                  <Label htmlFor="ftps-ca">CA Certificate PEM (optional)</Label>
+                                  <Label htmlFor="ftps-ca">{lt('CA Certificate PEM (optional)')}</Label>
                                   <Textarea id="ftps-ca" value={caCertPem} onChange={(e) => setCaCertPem(e.target.value)} placeholder="-----BEGIN CERTIFICATE-----" />
                                 </div>
                               </>
@@ -936,19 +971,19 @@ export function ExternalSourcesSettings() {
                         {(provider === 'GOOGLE_DRIVE' || provider === 'ONEDRIVE') ? (
                           <div className="space-y-2">
                             <div className="text-sm">
-                              <div className="font-medium">Select folder & file pattern</div>
-                              <div className="text-muted-foreground">Pick a folder so you know exactly what will be scanned.</div>
+                              <div className="font-medium">{lt('Select folder & file pattern')}</div>
+                              <div className="text-muted-foreground">{lt('Pick a folder so you know exactly what will be scanned.')}</div>
                             </div>
 
                             <div className="space-y-2">
-                              <Label>File Pattern (glob)</Label>
+                              <Label>{lt('File Pattern (glob)')}</Label>
                               <Input value={fileGlob} onChange={(e) => setFileGlob(e.target.value)} placeholder="**/*.pdf" />
                             </div>
 
                             <div className="rounded-md border p-3 text-sm">
-                              Current folder:{' '}
+                              {lt('Current folder:')}{' '}
                               <span className="font-mono text-xs break-all">
-                                {folderId || (wizardSource?.config?.folder_id as string | undefined) || '(not set)'}
+                                {folderId || (wizardSource?.config?.folder_id as string | undefined) || lt('(not set)')}
                               </span>
                             </div>
 
@@ -958,38 +993,38 @@ export function ExternalSourcesSettings() {
                                 onClick={() => wizardSource && openFolderPicker(wizardSource)}
                                 disabled={working || pickerLoading || !wizardSource}
                               >
-                                Pick Folder
+                                {lt('Pick Folder')}
                               </Button>
                             </div>
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            <Label>File Pattern (glob)</Label>
+                            <Label>{lt('File Pattern (glob)')}</Label>
                             <Input value={fileGlob} onChange={(e) => setFileGlob(e.target.value)} placeholder="**/*" />
                           </div>
                         )}
 
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-2">
-                            <Label>Document Type</Label>
-                            <Select value={documentType} onValueChange={(v) => setDocumentType(v as any)}>
+                            <Label>{lt('Document Type')}</Label>
+                            <Select value={documentType} onValueChange={(v) => setDocumentType(v as 'invoice' | 'receipt' | 'bank_statement' | 'other' | 'none') }>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select type" />
+                                <SelectValue placeholder={lt('Select type')} />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="none">Auto/Unknown</SelectItem>
-                                <SelectItem value="invoice">Invoice</SelectItem>
-                                <SelectItem value="receipt">Receipt</SelectItem>
-                                <SelectItem value="bank_statement">Bank Statement</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
+                                <SelectItem value="none">{lt('Auto/Unknown')}</SelectItem>
+                                <SelectItem value="invoice">{lt('Invoice')}</SelectItem>
+                                <SelectItem value="receipt">{lt('Receipt')}</SelectItem>
+                                <SelectItem value="bank_statement">{lt('Bank Statement')}</SelectItem>
+                                <SelectItem value="other">{lt('Other')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-2">
-                            <Label>Bank Account (for statements)</Label>
+                            <Label>{lt('Bank Account (for statements)')}</Label>
                             <Select value={bankAccountId} onValueChange={setBankAccountId} disabled={documentType !== 'bank_statement'}>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select bank account" />
+                                <SelectValue placeholder={lt('Select bank account')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {bankAccounts.map((a) => (
@@ -1007,28 +1042,28 @@ export function ExternalSourcesSettings() {
                     {wizardStep === 4 ? (
                       <div className="space-y-3">
                         <div className="text-sm">
-                          <div className="font-medium">Review & enable</div>
-                          <div className="text-muted-foreground">Turn it on and optionally run a quick test.</div>
+                          <div className="font-medium">{lt('Review & enable')}</div>
+                          <div className="text-muted-foreground">{lt('Turn it on and optionally run a quick test.')}</div>
                         </div>
 
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-2">
-                            <Label htmlFor="ext-schedule">Schedule (minutes)</Label>
+                            <Label htmlFor="ext-schedule">{lt('Schedule (minutes)')}</Label>
                             <Input id="ext-schedule" value={scheduleMinutes} onChange={(e) => setScheduleMinutes(e.target.value)} />
                           </div>
                           <div className="flex items-center gap-2 pt-6">
                             <Switch checked={enabled} onCheckedChange={setEnabled} />
-                            <span className="text-sm">Enabled</span>
+                            <span className="text-sm">{lt('Enabled')}</span>
                           </div>
                         </div>
 
                         {wizardSourceId ? (
                           <div className="flex flex-wrap gap-2">
                             <Button variant="outline" onClick={() => testSource(wizardSourceId)} disabled={working}>
-                              Test
+                              {lt('Test')}
                             </Button>
                             <Button onClick={wizardFinish} disabled={working}>
-                              Finish
+                              {lt('Finish')}
                             </Button>
                           </div>
                         ) : null}
@@ -1037,15 +1072,15 @@ export function ExternalSourcesSettings() {
 
                     <div className="flex justify-between gap-2">
                       <Button variant="outline" onClick={wizardBack} disabled={working || wizardStep === 1}>
-                        Back
+                        {lt('Back')}
                       </Button>
                       {wizardStep < 4 ? (
                         <Button onClick={wizardNext} disabled={working}>
-                          Next
+                          {lt('Next')}
                         </Button>
                       ) : (
                         <Button variant="outline" onClick={resetWizard} disabled={working}>
-                          Close
+                          {lt('Close')}
                         </Button>
                       )}
                     </div>
@@ -1055,74 +1090,78 @@ export function ExternalSourcesSettings() {
 
               <div className="rounded-md border p-3 space-y-3">
                 <div className="text-sm">
-                  <div className="font-medium">Supabase Cron (per-tenant)</div>
+                  <div className="font-medium">{lt('Supabase Cron (per-tenant)')}</div>
                   <div className="text-muted-foreground">
-                    Generate a tenant-specific cron secret (stored as a hash) and use it in your scheduled trigger.
+                    {lt('Generate a tenant-specific cron secret (stored as a hash) and use it in your scheduled trigger.')}
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="text-sm text-muted-foreground">
-                    Status: {cronConfigured ? 'configured' : 'not configured'}
-                    {cronKeyPrefix ? ` • key prefix ${cronKeyPrefix}` : ''}
+                    {lt('Status:')} {cronConfigured ? lt('configured') : lt('not configured')}
+                    {cronKeyPrefix ? lt(' • key prefix {prefix}', { prefix: cronKeyPrefix }) : ''}
                   </div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Enabled</Label>
+                    <Label>{lt('Enabled')}</Label>
                     <div className="flex items-center gap-2">
                       <Switch checked={cronEnabled} onCheckedChange={setCronEnabled} disabled={!cronConfigured} />
-                      <span className="text-sm text-muted-foreground">Allow scheduled imports for this tenant</span>
+                      <span className="text-sm text-muted-foreground">{lt('Allow scheduled imports for this tenant')}</span>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="cron-limit">Default run limit</Label>
+                    <Label htmlFor="cron-limit">{lt('Default run limit')}</Label>
                     <Input
                       id="cron-limit"
                       value={cronDefaultLimit}
                       onChange={(e) => setCronDefaultLimit(e.target.value)}
                       disabled={!cronConfigured}
                     />
-                    <p className="text-sm text-muted-foreground">Used when cron calls omit a limit (1–50).</p>
+                    <p className="text-sm text-muted-foreground">{lt('Used when cron calls omit a limit (1–50).')}</p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={rotateCronSecret} disabled={working}>
-                    {cronConfigured ? 'Rotate Cron Secret' : 'Generate Cron Secret'}
+                    {cronConfigured ? lt('Rotate Cron Secret') : lt('Generate Cron Secret')}
                   </Button>
                   <Button variant="outline" onClick={saveCronConfig} disabled={working || !cronConfigured}>
-                    Save Cron Config
+                    {lt('Save Cron Config')}
                   </Button>
                   {generatedCronSecret ? (
                     <Button onClick={copyCronSecret} disabled={working}>
-                      Copy Secret
+                      {lt('Copy Secret')}
                     </Button>
                   ) : null}
                 </div>
 
                 {generatedCronSecret ? (
                   <div className="rounded-md border p-3 text-sm space-y-2">
-                    <div className="font-medium">New cron secret (shown once)</div>
+                    <div className="font-medium">{lt('New cron secret (shown once)')}</div>
                     <div className="font-mono break-all text-xs">{generatedCronSecret}</div>
                     <div className="text-muted-foreground text-xs">
-                      Use this as header <span className="font-mono">x-ledgerai-cron-secret</span> when calling
-                      <span className="font-mono"> /api/external-sources/run</span> with <span className="font-mono">tenant_id</span>.
+                      {lt('Use this as header')}{' '}
+                      <span className="font-mono">x-ledgerai-cron-secret</span>{' '}
+                      {lt('when calling')}
+                      <span className="font-mono"> /api/external-sources/run</span>{' '}
+                      {lt('with')}{' '}
+                      <span className="font-mono">tenant_id</span>.
                     </div>
                   </div>
                 ) : null}
 
                 <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                  Scheduled call body example:
+                  {lt('Scheduled call body example:')}
                   <pre className="mt-2 whitespace-pre-wrap break-words text-xs">{JSON.stringify({ tenant_id: tenantId, limit: 10 }, null, 2)}</pre>
                 </div>
               </div>
 
               <div className="flex gap-2">
                 <Button variant="outline" onClick={fetchSources} disabled={working || loading}>
-                  Refresh
+                  {lt('Refresh')}
                 </Button>
               </div>
             </>
@@ -1132,12 +1171,14 @@ export function ExternalSourcesSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Configured Sources</CardTitle>
-          <CardDescription>{loading ? 'Loading…' : `${sources.length} source(s)`}</CardDescription>
+          <CardTitle>{lt('Configured Sources')}</CardTitle>
+          <CardDescription>
+            {loading ? lt('Loading…') : lt('{count} source(s)', { count: sources.length })}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {!canManage ? null : sources.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No external sources configured.</div>
+            <div className="text-sm text-muted-foreground">{lt('No external sources configured.')}</div>
           ) : (
             sources.map((s) => (
               <div key={s.id} className="rounded-md border p-3 space-y-3">
@@ -1145,33 +1186,39 @@ export function ExternalSourcesSettings() {
                   <div className="text-sm">
                     <div className="font-medium">{s.name}</div>
                     <div className="text-muted-foreground">
-                      {s.provider} • every {s.schedule_minutes}m • {s.enabled ? 'enabled' : 'disabled'}
-                      {s.last_run_at ? ` • last run ${new Date(s.last_run_at).toLocaleString()}` : ''}
+                      {lt('{provider} • every {minutes}m • {state}', {
+                        provider: s.provider,
+                        minutes: s.schedule_minutes,
+                        state: s.enabled ? lt('enabled') : lt('disabled'),
+                      })}
+                      {s.last_run_at ? lt(' • last run {datetime}', { datetime: new Date(s.last_run_at).toLocaleString() }) : ''}
                       {isCloud(s)
-                        ? ` • folder ${(s.config?.folder_id as string | undefined) || '(not set)'}`
+                        ? lt(' • folder {folder}', {
+                            folder: (s.config?.folder_id as string | undefined) || lt('(not set)'),
+                          })
                         : ''}
                     </div>
 
                     {isCloud(s) ? (
                       <div className="mt-1 text-xs text-muted-foreground">
                         {!cloudConnected(s) ? (
-                          <>Step 1: Connect • Step 2: Pick Folder • Step 3: Test</>
+                          <>{lt('Step 1: Connect • Step 2: Pick Folder • Step 3: Test')}</>
                         ) : (
                           <>
-                            Connected as{' '}
+                            {lt('Connected as')}{' '}
                             <span className="font-medium">
-                              {cloudInfoById[s.id]?.account?.email || cloudInfoById[s.id]?.account?.displayName || 'unknown'}
+                              {cloudInfoById[s.id]?.account?.email || cloudInfoById[s.id]?.account?.displayName || lt('unknown')}
                             </span>
                             {cloudInfoById[s.id]?.folder_id ? (
                               <>
                                 {' '}
-                                • Folder:{' '}
+                                • {lt('Folder:')}{' '}
                                 <span className="font-medium">
                                   {cloudInfoById[s.id]?.folder_name || cloudInfoById[s.id]?.folder_id}
                                 </span>
                               </>
                             ) : (
-                              <> • Folder: not selected</>
+                              <> • {lt('Folder: not selected')}</>
                             )}
                           </>
                         )}
@@ -1182,11 +1229,11 @@ export function ExternalSourcesSettings() {
                     {isCloud(s) ? (
                       cloudConnected(s) ? (
                         <Button variant="outline" onClick={() => disconnectSource(s.id)} disabled={working}>
-                          Disconnect
+                          {lt('Disconnect')}
                         </Button>
                       ) : (
                         <Button variant="outline" onClick={() => connectSource(s)} disabled={working}>
-                          Connect
+                          {lt('Connect')}
                         </Button>
                       )
                     ) : null}
@@ -1197,31 +1244,40 @@ export function ExternalSourcesSettings() {
                         onClick={() => openFolderPicker(s)}
                         disabled={working || pickerLoading}
                       >
-                        Pick Folder
+                        {lt('Pick Folder')}
                       </Button>
                     ) : null}
 
                     <Button variant="outline" onClick={() => testSource(s.id)} disabled={working || !canRunSource(s)}>
-                      Test
+                      {lt('Test')}
                     </Button>
                     <Button onClick={() => runSource(s.id)} disabled={working || !canRunSource(s)}>
-                      Run Now
+                      {lt('Run Now')}
                     </Button>
                     <Button
                       variant="destructive"
                       onClick={() => deleteSource(s.id)}
                       disabled={working}
                     >
-                      Delete
+                      {lt('Delete')}
                     </Button>
                   </div>
                 </div>
 
+                {/* Cloud storage token/session error notification */}
+                {isCloud(s) && tokenErrorById[s.id] && (
+                  <div className="rounded bg-red-50 border border-red-200 p-2 text-sm text-red-800 flex items-center gap-2 mb-2">
+                    <span>{lt('Cloud storage access for this source has expired or been revoked. Scheduled jobs and manual imports will not work until you reconnect.')}</span>
+                    <Button size="sm" variant="destructive" onClick={() => handleReconnect(s)}>
+                      {lt('Reconnect')}
+                    </Button>
+                  </div>
+                )}
                 {pickerSourceId === s.id ? (
                   <div className="rounded-md border bg-muted/30 p-3 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm text-muted-foreground">
-                        Browse folders (starting at root)
+                        {lt('Browse folders (starting at root)')}
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -1229,23 +1285,23 @@ export function ExternalSourcesSettings() {
                           onClick={navigateBackFolder}
                           disabled={pickerLoading || pickerStack.length === 0}
                         >
-                          Back
+                          {lt('Back')}
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => loadFolders(s.id, pickerParentId)}
                           disabled={pickerLoading}
                         >
-                          Refresh
+                          {lt('Refresh')}
                         </Button>
                         <Button variant="outline" onClick={closeFolderPicker} disabled={pickerLoading}>
-                          Close
+                          {lt('Close')}
                         </Button>
                       </div>
                     </div>
 
                     <div className="text-sm">
-                      <div className="text-muted-foreground">Current folder:</div>
+                      <div className="text-muted-foreground">{lt('Current folder:')}</div>
                       <div className="font-mono text-xs break-all">{pickerParentId}</div>
                     </div>
 
@@ -1254,15 +1310,15 @@ export function ExternalSourcesSettings() {
                         onClick={() => updateCloudFolder(s, pickerParentId)}
                         disabled={working || pickerLoading}
                       >
-                        Select This Folder
+                        {lt('Select This Folder')}
                       </Button>
                     </div>
 
                     {pickerLoading ? (
-                      <div className="text-sm text-muted-foreground">Loading folders…</div>
+                      <div className="text-sm text-muted-foreground">{lt('Loading folders…')}</div>
                     ) : pickerFolders.length === 0 ? (
                       <div className="text-sm text-muted-foreground">
-                        No folders found under this location. You can still click “Select This Folder” to use the current folder (including root).
+                        {lt('No folders found under this location. You can still click “Select This Folder” to use the current folder (including root).')}
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -1282,7 +1338,7 @@ export function ExternalSourcesSettings() {
                               onClick={() => updateCloudFolder(s, f.id)}
                               disabled={working || pickerLoading}
                             >
-                              Select
+                              {lt('Select')}
                             </Button>
                           </div>
                         ))}
@@ -1291,10 +1347,10 @@ export function ExternalSourcesSettings() {
 
                       {!pickerLoading ? (
                         <div className="space-y-2">
-                          <div className="text-sm text-muted-foreground">Files (preview)</div>
+                          <div className="text-sm text-muted-foreground">{lt('Files (preview)')}</div>
                           {pickerFiles.length === 0 ? (
                             <div className="text-sm text-muted-foreground">
-                              No files found in this folder.
+                              {lt('No files found in this folder.')}
                             </div>
                           ) : (
                             <div className="space-y-1">
@@ -1302,7 +1358,7 @@ export function ExternalSourcesSettings() {
                                 <div key={f.id} className="text-sm flex items-center justify-between gap-2 rounded border bg-background px-2 py-1">
                                   <div className="truncate">{f.name}</div>
                                   <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {typeof f.size === 'number' ? `${Math.round(f.size / 1024)} KB` : ''}
+                                    {typeof f.size === 'number' ? lt('{size} KB', { size: Math.round(f.size / 1024) }) : ''}
                                   </div>
                                 </div>
                               ))}

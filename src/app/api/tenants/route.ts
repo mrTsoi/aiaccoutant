@@ -17,9 +17,9 @@ export async function POST(req: Request) {
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { name?: string; slug?: string; locale?: string }
+  let body: { name?: string; slug?: string; locale?: string; currency?: string }
   try {
-    body = (await req.json()) as any
+    body = (await req.json()) as unknown as { name?: string; slug?: string; locale?: string; currency?: string }
   } catch {
     return badRequest('Invalid JSON body')
   }
@@ -27,15 +27,20 @@ export async function POST(req: Request) {
   const name = (body?.name || '').trim()
   const slug = (body?.slug || '').trim()
   const locale = (body?.locale || 'en').trim()
+  const currencyRaw = (body?.currency || '').trim()
+  const currency = currencyRaw ? currencyRaw.toUpperCase() : undefined
 
   if (!name) return badRequest('name is required')
   if (!slug) return badRequest('slug is required')
+  if (currency && !/^[A-Z]{3}$/.test(currency)) return badRequest('currency must be a 3-letter ISO code')
 
-  const { data: tenant, error: tenantError } = await (supabase.from('tenants') as any)
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
     .insert({
       name,
       slug,
       locale,
+      ...(currency ? { currency } : {}),
       owner_id: user.id,
       is_active: true,
     })
@@ -45,8 +50,9 @@ export async function POST(req: Request) {
   if (tenantError) return NextResponse.json({ error: tenantError.message }, { status: 400 })
 
   // Some schemas rely on triggers to create memberships; but if not present, ensure membership exists.
-  const { error: membershipError } = await (supabase.from('memberships') as any)
-    .insert({ tenant_id: (tenant as any).id, user_id: user.id, role: 'COMPANY_ADMIN', is_active: true })
+  const { error: membershipError } = await supabase
+    .from('memberships')
+    .insert({ tenant_id: tenant?.id, user_id: user.id, role: 'COMPANY_ADMIN', is_active: true })
     .select()
     .maybeSingle()
 
@@ -70,19 +76,19 @@ export async function PUT(req: Request) {
 
   let body: { tenant_id?: string; name?: string; locale?: string; currency?: string }
   try {
-    body = (await req.json()) as any
+    body = (await req.json()) as unknown as { tenant_id?: string; name?: string; locale?: string; currency?: string }
   } catch {
     return badRequest('Invalid JSON body')
   }
 
   if (!body?.tenant_id) return badRequest('tenant_id is required')
 
-  const payload: any = {}
+  const payload: Record<string, string> = {}
   if (typeof body?.name === 'string') payload.name = body.name
   if (typeof body?.locale === 'string') payload.locale = body.locale
   if (typeof body?.currency === 'string') payload.currency = body.currency
 
-  const { error } = await (supabase.from('tenants') as any).update(payload).eq('id', body.tenant_id)
+  const { error } = await supabase.from('tenants').update(payload).eq('id', body.tenant_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
   return NextResponse.json({ ok: true })

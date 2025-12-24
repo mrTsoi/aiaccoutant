@@ -16,6 +16,7 @@ import { getExchangeRate } from '@/lib/currency'
 import { CurrencySelect } from '@/components/ui/currency-select'
 import { ImagePreview } from '@/components/ui/image-preview'
 import { toast } from "sonner"
+import { useLiterals } from '@/hooks/use-literals'
 
 type Document = Database['public']['Tables']['documents']['Row']
 type DocumentData = Database['public']['Tables']['document_data']['Row']
@@ -27,6 +28,9 @@ interface Props {
 }
 
 export function DocumentVerificationModal({ documentId, onClose, onSaved }: Props) {
+  const lt = useLiterals()
+  const ltVars = (english: string, vars?: Record<string, string | number>) => lt(english, vars)
+
   const [document, setDocument] = useState<Document | null>(null)
   const [docData, setDocData] = useState<DocumentData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -35,6 +39,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
   const [zoomLevel, setZoomLevel] = useState(100)
   const [formData, setFormData] = useState({
     vendor_name: '',
+    customer_name: '',
     document_date: '',
     total_amount: '',
     currency: 'USD',
@@ -77,10 +82,10 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
   const fetchDocumentDetails = useCallback(async () => {
     try {
       setLoading(true)
-      
+
       // Fetch document
-      const { data: doc, error: docError } = await (supabase
-        .from('documents') as any)
+      const { data: doc, error: docError } = await supabase
+        .from('documents')
         .select('*')
         .eq('id', documentId)
         .single()
@@ -88,62 +93,49 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       if (docError) throw docError
       setDocument(doc)
 
-      // Fetch document data separately to ensure freshness
-      const { data: dData, error: dataError } = await (supabase
-        .from('document_data') as any)
+      // Fetch document data separately
+      const { data: dData, error: dataError } = await supabase
+        .from('document_data')
         .select('*')
         .eq('document_id', documentId)
         .maybeSingle()
 
       if (dataError) throw dataError
 
-      // Load preview
+      // Load preview from storage
       const { data: blob, error: storageError } = await supabase.storage
         .from('documents')
-        .download((doc as any).file_path)
+        .download(doc!.file_path)
 
-      if (!storageError && blob) {
-        setPreviewUrl(URL.createObjectURL(blob))
-      }
+      if (!storageError && blob) setPreviewUrl(URL.createObjectURL(blob))
 
-      // Helper to safely format dates
       const formatDate = (dateStr: string | null | undefined) => {
         if (!dateStr) return ''
         const cleanStr = dateStr.trim()
-        
-        // 1. YYYY-MM-DD
         if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) return cleanStr
-        
-        // 2. YYYY-MM-DDTHH:mm:ss... (ISO)
         if (/^\d{4}-\d{2}-\d{2}T/.test(cleanStr)) return cleanStr.split('T')[0]
-        
-        // 3. Try parsing as date
         const d = new Date(cleanStr)
         if (isNaN(d.getTime())) return ''
-        
-        // 4. Use local time components
         const year = d.getFullYear()
         const month = String(d.getMonth() + 1).padStart(2, '0')
         const day = String(d.getDate()).padStart(2, '0')
         return `${year}-${month}-${day}`
       }
 
-      // Set form data if exists
       if (dData) {
         setDocData(dData)
-        
-        const extracted = (dData.extracted_data as any) || {}
+        const extracted = (dData.extracted_data as unknown as Record<string, any>) || {}
         const rawDate = dData.document_date ?? extracted.document_date
 
         setFormData({
           vendor_name: dData.vendor_name ?? extracted.vendor_name ?? '',
+          customer_name: dData.customer_name ?? extracted.customer_name ?? '',
           document_date: formatDate(rawDate),
           total_amount: dData.total_amount?.toString() ?? extracted.total_amount?.toString() ?? '',
           currency: dData.currency ?? extracted.currency ?? 'USD',
           invoice_number: extracted.invoice_number ?? '',
-          document_type: doc.document_type ?? extracted.document_type ?? 'invoice',
+          document_type: doc!.document_type ?? extracted.document_type ?? 'invoice',
           transaction_type: extracted.transaction_type ?? 'expense',
-          // Bank Statement Fields
           statement_period_start: extracted.statement_period_start || '',
           statement_period_end: extracted.statement_period_end || '',
           opening_balance: extracted.opening_balance?.toString() || '',
@@ -152,14 +144,16 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           account_number: extracted.account_number || ''
         })
 
-        // Bank transactions
         if (extracted.bank_transactions && Array.isArray(extracted.bank_transactions)) {
-          setBankTransactions(extracted.bank_transactions.map((t: any) => ({
-            date: t.date || '',
-            description: t.description || '',
-            amount: (t.amount ?? '').toString(),
-            type: t.type === 'CREDIT' ? 'CREDIT' : 'DEBIT'
-          })))
+          setBankTransactions(extracted.bank_transactions.map((t: unknown) => {
+            const tx = t as Record<string, any>
+            return {
+              date: tx.date || '',
+              description: tx.description || '',
+              amount: (tx.amount ?? '').toString(),
+              type: tx.type === 'CREDIT' ? 'CREDIT' : 'DEBIT'
+            }
+          }))
         } else {
           setBankTransactions([])
         }
@@ -257,7 +251,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
         total_amount: parseFloat(formData.total_amount) || 0,
         currency: formData.currency,
         extracted_data: {
-          ...((docData?.extracted_data as any) || {}),
+          ...((docData?.extracted_data as unknown as Record<string, any>) || {}),
           vendor_name: formData.vendor_name,
           document_date: formData.document_date,
           total_amount: parseFloat(formData.total_amount) || 0,
@@ -280,8 +274,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       }
 
       // Use upsert to handle both insert and update scenarios (and race conditions)
-      const { error: dataError } = await (supabase
-        .from('document_data') as any)
+      const { error: dataError } = await supabase
+        .from('document_data')
         .upsert({
           document_id: document.id,
           ...updateData,
@@ -289,7 +283,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           confidence_score: docData?.confidence_score ?? 1.0,
           line_items: docData?.line_items ?? [],
           metadata: {
-            ...((docData?.metadata as any) || {}),
+            ...((docData?.metadata as unknown as Record<string, any>) || {}),
             verified_by_user: true
           }
         }, { onConflict: 'document_id' })
@@ -297,24 +291,24 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       if (dataError) throw dataError
 
       // Update document type
-      await (supabase
-        .from('documents') as any)
+      await supabase
+        .from('documents')
         .update({ document_type: formData.document_type })
         .eq('id', document.id)
 
       // Handle Bank Statement Updates
       if (formData.document_type === 'bank_statement') {
         // 1. Find existing statement
-        const { data: existingStatement } = await (supabase
-          .from('bank_statements') as any)
+        const { data: existingStatement } = await supabase
+          .from('bank_statements')
           .select('id')
           .eq('document_id', document.id)
           .maybeSingle()
         
         if (existingStatement) {
           // Update statement details
-          await (supabase
-            .from('bank_statements') as any)
+          await supabase
+            .from('bank_statements')
             .update({
               start_date: formData.statement_period_start || null,
               end_date: formData.statement_period_end || null,
@@ -326,11 +320,16 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
           // Update transactions (Delete all and re-insert is safest for sync)
           // Ideally we would diff, but for now this ensures consistency with the verified data
-          await (supabase
-            .from('bank_transactions') as any)
-            .delete()
-            .eq('bank_statement_id', existingStatement.id)
-            .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
+            await supabase
+              .from('bank_transactions')
+              .delete()
+              .eq('bank_statement_id', existingStatement.id)
+              .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
+            await supabase
+              .from('bank_transactions')
+              .delete()
+              .eq('bank_statement_id', existingStatement.id)
+              .eq('status', 'PENDING') // Only delete pending ones to avoid messing up matched ones? 
             // Actually, if user is verifying the document, they are defining the source of truth.
             // If some were already matched, deleting them might break links.
             // For now, let's assume this is done BEFORE matching.
@@ -338,8 +337,9 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             // Let's just delete all for now as this is "Verification" stage.
           
           if (bankTransactions.length > 0) {
+            if (!currentTenant?.id) throw new Error('No tenant selected')
             const txsToInsert = bankTransactions.map(tx => ({
-              tenant_id: currentTenant?.id,
+              tenant_id: currentTenant.id,
               bank_statement_id: existingStatement.id,
               transaction_date: tx.date,
               description: tx.description,
@@ -349,13 +349,13 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
               confidence_score: 1.0 // User verified
             }))
             
-            await (supabase.from('bank_transactions') as any).insert(txsToInsert as any)
+            await supabase.from('bank_transactions').insert(txsToInsert)
           }
         }
       } else {
         // Handle Invoice/Receipt Updates (Existing Logic)
-        const { data: transaction } = await (supabase
-          .from('transactions') as any)
+        const { data: transaction } = await supabase
+          .from('transactions')
           .select('id, status')
           .eq('document_id', document.id)
           .single()
@@ -363,25 +363,30 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
         if (transaction && transaction.status === 'DRAFT') {
           // ... existing logic ...
           // 1. Determine Currency & Rate
-          const tenantCurrency = (currentTenant as any)?.currency || 'USD'
+          const tenantCurrency = 'USD'
           const docCurrency = formData.currency || tenantCurrency
           let exchangeRate = 1.0
           
           if (docCurrency !== tenantCurrency) {
              try {
-               exchangeRate = await getExchangeRate(docCurrency, tenantCurrency, currentTenant?.id)
+               const { rate: fetched, ok } = await getExchangeRate(docCurrency, tenantCurrency, currentTenant?.id)
+               if (ok) {
+                 exchangeRate = fetched
+               } else {
+                 console.error('Failed to fetch exchange rate, falling back to 1.0')
+               }
              } catch (e) {
                console.error('Failed to fetch rate', e)
              }
           }
 
           // 2. Update transaction details
-          await (supabase
-            .from('transactions') as any)
+          await supabase
+            .from('transactions')
             .update({
               transaction_date: formData.document_date || new Date().toISOString().split('T')[0],
               reference_number: formData.invoice_number || null,
-              description: `${formData.vendor_name || 'Vendor'} - ${document.file_name}`,
+              description: `${formData.vendor_name || lt('Vendor')} - ${document.file_name}`,
               currency: docCurrency,
               exchange_rate: exchangeRate
             })
@@ -391,10 +396,10 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           // In a real app, this is complex because we don't know which line item corresponds to what.
           // For now, we'll fetch line items and update the amounts if there are exactly 2 (simple double entry)
           
-          const { data: lineItems } = await (supabase
-            .from('line_items') as any)
-            .select('*')
-            .eq('transaction_id', transaction.id)
+              const { data: lineItems } = await supabase
+                .from('line_items')
+                .select('*')
+                .eq('transaction_id', transaction.id)
 
           if (lineItems && lineItems.length === 2) {
             const amount = parseFloat(formData.total_amount) || 0
@@ -427,10 +432,10 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
               await (supabase
                 .from('line_items') as any)
                 .update({ 
-                    debit: item.debit, 
-                    credit: item.credit,
-                    debit_foreign: item.debit_foreign,
-                    credit_foreign: item.credit_foreign
+                  debit: item.debit, 
+                  credit: item.credit,
+                  debit_foreign: item.debit_foreign,
+                  credit_foreign: item.credit_foreign
                 })
                 .eq('id', item.id)
             }
@@ -440,11 +445,11 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
       if (onSaved) onSaved()
       onClose()
-      toast.success('Document verified and saved')
+      toast.success(lt('Document verified and saved'))
 
     } catch (error: any) {
       console.error('Save error:', error)
-      toast.error('Failed to save: ' + error.message)
+      toast.error(ltVars('Failed to save: {message}', { message: error?.message ?? '' }))
     } finally {
       setSaving(false)
     }
@@ -492,7 +497,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
               setZoomLevel(100)
               setPosition({ x: 0, y: 0 })
             }}
-            title="Reset View"
+            title={lt('Reset View')}
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
@@ -512,7 +517,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             document?.file_type.startsWith('image/') ? (
               <ImagePreview
                 src={previewUrl}
-                alt="Document Preview"
+                alt={lt('Document Preview')}
                 style={{
                   transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel / 100})`,
                   transition: isDragging ? 'none' : 'transform 0.2s',
@@ -523,13 +528,13 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
               <iframe 
                 src={previewUrl} 
                 className="w-full h-full bg-white"
-                title="PDF Preview"
+                title={lt('PDF Preview')}
               />
             )
           ) : (
             <div className="text-white text-center">
               <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>Preview not available</p>
+              <p>{lt('Preview not available')}</p>
             </div>
           )}
         </div>
@@ -538,7 +543,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
       {/* Right Pane: Data Form */}
       <div className="w-full lg:w-[450px] bg-white h-[60vh] lg:h-full flex flex-col shadow-2xl">
         <div className="p-4 border-b flex items-center justify-between bg-gray-50">
-          <h2 className="font-semibold text-lg">Verify Data</h2>
+          <h2 className="font-semibold text-lg">{lt('Verify Data')}</h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
@@ -549,12 +554,12 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-sm font-medium text-yellow-800">Validation Warning</h4>
+                <h4 className="text-sm font-medium text-yellow-800">{lt('Validation Warning')}</h4>
                 <ul className="text-xs text-yellow-700 mt-1 list-disc list-inside">
                   {document.validation_flags?.map(flag => (
                     <li key={flag}>
-                      {flag === 'DUPLICATE_DOCUMENT' ? 'This document appears to be a duplicate.' :
-                       flag === 'WRONG_TENANT' ? 'The bill-to name does not match the tenant.' :
+                      {flag === 'DUPLICATE_DOCUMENT' ? lt('This document appears to be a duplicate.') :
+                       flag === 'WRONG_TENANT' ? lt('The bill-to name does not match the tenant.') :
                        flag}
                     </li>
                   ))}
@@ -566,29 +571,29 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Document Type</Label>
+                <Label>{lt('Document Type')}</Label>
                 <select 
                   className="w-full p-2 border rounded-md text-sm"
                   value={formData.document_type}
                   onChange={e => setFormData({...formData, document_type: e.target.value})}
                 >
-                  <option value="invoice">Invoice</option>
-                  <option value="receipt">Receipt</option>
-                  <option value="credit_note">Credit Note</option>
-                  <option value="bank_statement">Bank Statement</option>
-                  <option value="other">Other</option>
+                  <option value="invoice">{lt('Invoice')}</option>
+                  <option value="receipt">{lt('Receipt')}</option>
+                  <option value="credit_note">{lt('Credit Note')}</option>
+                  <option value="bank_statement">{lt('Bank Statement')}</option>
+                  <option value="other">{lt('Other')}</option>
                 </select>
               </div>
               {formData.document_type !== 'bank_statement' && (
                 <div className="space-y-2">
-                  <Label>Transaction Type</Label>
+                  <Label>{lt('Transaction Type')}</Label>
                   <select 
                     className="w-full p-2 border rounded-md text-sm"
                     value={formData.transaction_type}
                     onChange={e => setFormData({...formData, transaction_type: e.target.value})}
                   >
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
+                    <option value="expense">{lt('Expense')}</option>
+                    <option value="income">{lt('Income')}</option>
                   </select>
                 </div>
               )}
@@ -597,24 +602,24 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             {formData.document_type === 'bank_statement' ? (
               <>
                 <div className="space-y-2">
-                  <Label>Bank Name</Label>
+                  <Label>{lt('Bank Name')}</Label>
                   <Input 
                     value={formData.bank_name}
                     onChange={e => setFormData({...formData, bank_name: e.target.value})}
-                    placeholder="e.g. Chase Bank"
+                    placeholder={lt('e.g. Chase Bank')}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Account Number (Last 4)</Label>
+                  <Label>{lt('Account Number (Last 4)')}</Label>
                   <Input 
                     value={formData.account_number}
                     onChange={e => setFormData({...formData, account_number: e.target.value})}
-                    placeholder="e.g. 1234"
+                    placeholder={lt('e.g. 1234')}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Start Date</Label>
+                    <Label>{lt('Start Date')}</Label>
                     <Input 
                       type="date"
                       value={formData.statement_period_start}
@@ -622,7 +627,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>End Date</Label>
+                    <Label>{lt('End Date')}</Label>
                     <Input 
                       type="date"
                       value={formData.statement_period_end}
@@ -632,7 +637,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Opening Balance</Label>
+                    <Label>{lt('Opening Balance')}</Label>
                     <Input 
                       type="number"
                       step="0.01"
@@ -641,7 +646,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Closing Balance</Label>
+                    <Label>{lt('Closing Balance')}</Label>
                     <Input 
                       type="number"
                       step="0.01"
@@ -653,14 +658,16 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
                 <div className="pt-4 border-t">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-gray-900">Extracted Transactions ({bankTransactions.length})</h3>
+                    <h3 className="text-sm font-medium text-gray-900">
+                      {ltVars('Extracted Transactions ({count})', { count: bankTransactions.length })}
+                    </h3>
                     <Button 
                       size="sm" 
                       variant="outline" 
                       onClick={() => setBankTransactions([...bankTransactions, { date: '', description: '', amount: '', type: 'DEBIT' }])}
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Add Item
+                      {lt('Add Item')}
                     </Button>
                   </div>
                   
@@ -669,7 +676,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                       <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-md border">
                         <div className="grid grid-cols-12 gap-2 flex-1">
                           <div className="col-span-3">
-                            <Label className="text-xs text-gray-500 mb-1 block">Date</Label>
+                            <Label className="text-xs text-gray-500 mb-1 block">{lt('Date')}</Label>
                             <Input 
                               type="date" 
                               className="h-8 text-xs"
@@ -682,7 +689,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                             />
                           </div>
                           <div className="col-span-5">
-                            <Label className="text-xs text-gray-500 mb-1 block">Description</Label>
+                            <Label className="text-xs text-gray-500 mb-1 block">{lt('Description')}</Label>
                             <Input 
                               className="h-8 text-xs"
                               value={tx.description}
@@ -694,7 +701,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                             />
                           </div>
                           <div className="col-span-2">
-                            <Label className="text-xs text-gray-500 mb-1 block">Amount</Label>
+                            <Label className="text-xs text-gray-500 mb-1 block">{lt('Amount')}</Label>
                             <Input 
                               type="number" 
                               className="h-8 text-xs"
@@ -707,7 +714,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                             />
                           </div>
                           <div className="col-span-2">
-                            <Label className="text-xs text-gray-500 mb-1 block">Type</Label>
+                            <Label className="text-xs text-gray-500 mb-1 block">{lt('Type')}</Label>
                             <select 
                               className="w-full h-8 text-xs border rounded-md px-1 bg-white"
                               value={tx.type}
@@ -717,8 +724,8 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                                 setBankTransactions(newTxs)
                               }}
                             >
-                              <option value="DEBIT">Debit</option>
-                              <option value="CREDIT">Credit</option>
+                              <option value="DEBIT">{lt('Debit')}</option>
+                              <option value="CREDIT">{lt('Credit')}</option>
                             </select>
                           </div>
                         </div>
@@ -737,7 +744,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                     ))}
                     {bankTransactions.length === 0 && (
                       <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg">
-                        No transactions extracted
+                        {lt('No transactions extracted')}
                       </div>
                     )}
                   </div>
@@ -746,17 +753,26 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             ) : (
               <>
                 <div className="space-y-2">
-                  <Label>Vendor / Payee</Label>
+                  <Label>{lt('Vendor / Payee')}</Label>
                   <Input 
                     value={formData.vendor_name}
                     onChange={e => setFormData({...formData, vendor_name: e.target.value})}
-                    placeholder="e.g. Amazon Web Services"
+                    placeholder={lt('e.g. Amazon Web Services')}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{lt('Customer') + ' / ' + lt('Payer')}</Label>
+                  <Input 
+                    value={formData.customer_name}
+                    onChange={e => setFormData({...formData, customer_name: e.target.value})}
+                    placeholder={lt('e.g. Amazon Web Services')}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Date</Label>
+                    <Label>{lt('Date')}</Label>
                     <Input 
                       type="date"
                       value={formData.document_date}
@@ -764,18 +780,18 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Reference #</Label>
+                    <Label>{lt('Reference #')}</Label>
                     <Input 
                       value={formData.invoice_number}
                       onChange={e => setFormData({...formData, invoice_number: e.target.value})}
-                      placeholder="INV-001"
+                      placeholder={lt('INV-001')}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-2 space-y-2">
-                    <Label>Total Amount</Label>
+                    <Label>{lt('Total Amount')}</Label>
                     <Input 
                       type="number"
                       step="0.01"
@@ -784,7 +800,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Currency</Label>
+                    <Label>{lt('Currency')}</Label>
                     <CurrencySelect 
                       value={formData.currency}
                       onChange={value => setFormData({...formData, currency: value})}
@@ -795,7 +811,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             )}
 
             <div className="pt-4 border-t">
-              <h3 className="text-sm font-medium mb-2 text-gray-500">AI Confidence</h3>
+              <h3 className="text-sm font-medium mb-2 text-gray-500">{lt('AI Confidence')}</h3>
               <div className="flex items-center gap-2">
                 <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden">
                   <div 
@@ -820,12 +836,12 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
             {saving ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {lt('Saving...')}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Verify & Save
+                {lt('Verify & Save')}
               </>
             )}
           </Button>
