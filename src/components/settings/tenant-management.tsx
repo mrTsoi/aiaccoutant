@@ -159,15 +159,34 @@ export default function TenantManagement() {
 
   const filteredTenants = tenants?.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.slug.toLowerCase().includes(search.toLowerCase()));
 
-  if (!filteredTenants || filteredTenants.length === 0) {
+  const noTenants = !filteredTenants || filteredTenants.length === 0
+
+  if (noTenants) {
     return (
-      <Card className="mt-8">
-        <CardContent className="flex items-center justify-center p-12">
-          <Loader2 className="w-8 h-8 animate-spin" />
-          <span className="ml-4">{lt("Loading tenants...")}</span>
-        </CardContent>
-      </Card>
-    );
+      <>
+        <Card className="mt-8">
+          <CardContent className="flex items-center justify-center p-12">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="ml-4">{lt("Loading tenants...")}</span>
+          </CardContent>
+        </Card>
+        {selectedTenant && (
+          <TenantEditModal
+            tenant={selectedTenant}
+            open={editOpen}
+            onOpenChange={(open) => {
+              console.debug('[TenantManagement] onOpenChange', { open, selectedTenantId: selectedTenant?.id })
+              if (!open) setSelectedTenant(null);
+              setEditOpen(open)
+            }}
+            onSaved={() => {
+              console.debug('[TenantManagement] onSaved called - refreshing tenants')
+              refreshTenants()
+            }}
+          />
+        )}
+      </>
+    )
   }
 
   return (
@@ -281,7 +300,19 @@ export default function TenantManagement() {
         </div>
       </CardContent>
       {selectedTenant && (
-        <TenantEditModal tenant={selectedTenant} open={editOpen} onOpenChange={(open) => { if (!open) setSelectedTenant(null); setEditOpen(open) }} onSaved={() => { setEditOpen(false); setSelectedTenant(null); refreshTenants() }} />
+        <TenantEditModal
+          tenant={selectedTenant}
+          open={editOpen}
+          onOpenChange={(open) => {
+            console.debug('[TenantManagement] onOpenChange', { open, selectedTenantId: selectedTenant?.id })
+            if (!open) setSelectedTenant(null);
+            setEditOpen(open)
+          }}
+          onSaved={() => {
+            console.debug('[TenantManagement] onSaved called - refreshing tenants')
+            refreshTenants()
+          }}
+        />
       )}
     </Card>
   );

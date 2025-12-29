@@ -84,6 +84,8 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
   // Preview State
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [fileType, setFileType] = useState<string>('')
+  const [extractedPayee, setExtractedPayee] = useState<string | null>(null)
+  const [extractedPayer, setExtractedPayer] = useState<string | null>(null)
   const [zoomLevel, setZoomLevel] = useState(100)
   const [isDragging, setIsDragging] = useState(false)
   const [position, setPosition] = useState({ x: 0, y: 0 })
@@ -219,6 +221,34 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
       if (docData?.currency) extractedCurrency = docData.currency
       else if (docData?.extracted_data && (docData.extracted_data as { currency?: string }).currency) extractedCurrency = (docData.extracted_data as { currency?: string }).currency
 
+      // Parse extracted_data for payee/payer names (support object or JSON string)
+      let parsedExtracted: any = null
+      if (docData?.extracted_data) {
+        try {
+          parsedExtracted = typeof docData.extracted_data === 'string' ? JSON.parse(docData.extracted_data) : docData.extracted_data
+        } catch (e) {
+          // If parsing fails, fall back to the raw value
+          parsedExtracted = docData.extracted_data
+        }
+      }
+
+      const getFirstMatching = (obj: any, keys: string[]) => {
+        if (!obj) return null
+        for (const k of keys) {
+          if (typeof obj === 'object' && obj[k]) return String(obj[k])
+        }
+        return null
+      }
+
+      const vendorKeys = ['vendor', 'payee', 'supplier', 'seller', 'vendor_name', 'payee_name']
+      const customerKeys = ['customer', 'payer', 'client', 'buyer', 'customer_name', 'payer_name']
+
+      const payeeName = getFirstMatching(parsedExtracted, vendorKeys) || getFirstMatching(docData, vendorKeys) || null
+      const payerName = getFirstMatching(parsedExtracted, customerKeys) || getFirstMatching(docData, customerKeys) || null
+
+      setExtractedPayee(payeeName)
+      setExtractedPayer(payerName)
+
       // 3. Ensure we have tenant currency before auto-fetching rates
       let currentTenantCurrency = tenantCurrency
       if (!currentTenantCurrency && currentTenant) {
@@ -267,22 +297,33 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
 
       const processedLines = (lineData || []).map((line: any) => {
         if (isForeign) {
-           const hasForeign = line.debit_foreign || line.credit_foreign
-           if (!hasForeign) {
-             // Migration/Fix: Move 'debit' to 'debit_foreign'
-             const foreignDebit = line.debit || 0
-             const foreignCredit = line.credit || 0
-             
-             return {
-               ...line,
-               debit_foreign: foreignDebit,
-               credit_foreign: foreignCredit,
-               // Recalculate Base Amount = Foreign * Rate
-               debit: Number((foreignDebit * rate).toFixed(2)),
-               credit: Number((foreignCredit * rate).toFixed(2))
-             }
-           }
+          // If foreign amounts exist (even zero), treat them as the source (face value)
+          const hasForeignProp = line.debit_foreign !== undefined || line.credit_foreign !== undefined
+
+          if (hasForeignProp) {
+            const foreignDebit = Number(line.debit_foreign) || 0
+            const foreignCredit = Number(line.credit_foreign) || 0
+            return {
+              ...line,
+              debit_foreign: foreignDebit,
+              credit_foreign: foreignCredit,
+              debit: Number((foreignDebit * rate).toFixed(2)),
+              credit: Number((foreignCredit * rate).toFixed(2))
+            }
+          }
+
+          // Fallback/migration: if foreign values are missing, assume stored debit/credit are the face values
+          const foreignDebit = Number(line.debit) || 0
+          const foreignCredit = Number(line.credit) || 0
+          return {
+            ...line,
+            debit_foreign: foreignDebit,
+            credit_foreign: foreignCredit,
+            debit: Number((foreignDebit * rate).toFixed(2)),
+            credit: Number((foreignCredit * rate).toFixed(2))
+          }
         }
+
         return line
       })
 
@@ -832,6 +873,25 @@ export function TransactionEditor({ transactionId, onClose, onSaved }: Props) {
               onChange={(e) => setTransaction({ ...transaction, description: e.target.value })}
               disabled={transaction.status === 'POSTED'}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="payee">{lt('Vendor / Payee')}</Label>
+              <Input
+                id="payee"
+                value={extractedPayee || ''}
+                disabled
+              />
+            </div>
+            <div>
+              <Label htmlFor="payer">{lt('Customer / Payer')}</Label>
+              <Input
+                id="payer"
+                value={extractedPayer || ''}
+                disabled
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

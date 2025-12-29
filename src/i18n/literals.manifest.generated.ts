@@ -768,7 +768,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.0e052e733688",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 81,
+    "line": 127,
     kind: 'lt-call'
   },
   {
@@ -808,7 +808,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.0e85749a6f40",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 765,
+    "line": 813,
     kind: 'lt-call'
   },
   {
@@ -1072,7 +1072,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.14d3bca87284",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 546,
+    "line": 575,
     kind: 'lt-call'
   },
   {
@@ -1496,7 +1496,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.1c89b1f2aaab",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 596,
+    "line": 644,
     kind: 'lt-call'
   },
   {
@@ -1576,7 +1576,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.1e05ce61911f",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 79,
+    "line": 125,
     kind: 'lt-call'
   },
   {
@@ -1736,7 +1736,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.2090a8e8c5ce",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 756,
+    "line": 804,
     kind: 'lt-call'
   },
   {
@@ -2472,7 +2472,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.2c21f68832ba",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 574,
+    "line": 622,
     kind: 'lt-call'
   },
   {
@@ -2960,7 +2960,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.348555007d52",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 783,
+    "line": 831,
     kind: 'lt-call'
   },
   {
@@ -3305,6 +3305,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     namespace: 'literals',
     "file": "src/components/settings/external-sources-settings.tsx",
     "line": 921,
+    kind: 'lt-call'
+  },
+  {
+    "text": "Add alternate or localized company names to help AI matching.",
+    "key": "literal.39787f0b3685",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 145,
     kind: 'lt-call'
   },
   {
@@ -3968,7 +3976,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.44ee5d8f08e9",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 582,
+    "line": 630,
     kind: 'lt-call'
   },
   {
@@ -4248,7 +4256,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.490aaabf32fb",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 794,
+    "line": 842,
     kind: 'lt-call'
   },
   {
@@ -4496,7 +4504,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.4dba3be550bc",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 670,
+    "line": 718,
     kind: 'lt-call'
   },
   {
@@ -4560,7 +4568,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.4e275ec1fcf1",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 562,
+    "line": 591,
     kind: 'lt-call'
   },
   {
@@ -4665,6 +4673,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     namespace: 'literals',
     "file": "src/components/settings/external-sources-settings.tsx",
     "line": 1102,
+    kind: 'lt-call'
+  },
+  {
+    "text": "Aliases updated",
+    "key": "literal.4f486d2acef8",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 90,
     kind: 'lt-call'
   },
   {
@@ -5368,7 +5384,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.5a7fa39b49f9",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 787,
+    "line": 835,
     kind: 'lt-call'
   },
   {
@@ -5704,7 +5720,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.5ecda73b3839",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 844,
+    "line": 892,
     kind: 'lt-call'
   },
   {
@@ -5720,7 +5736,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.5ee8dd2f7d4b",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 760,
+    "line": 808,
     kind: 'lt-call'
   },
   {
@@ -5952,7 +5968,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.62c51d552f4c",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 86,
+    "line": 132,
     kind: 'lt-call'
   },
   {
@@ -6128,7 +6144,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.660ee18d5af7",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 747,
+    "line": 795,
     kind: 'lt-call'
   },
   {
@@ -6496,7 +6512,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.6b57efc44822",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 589,
+    "line": 637,
     kind: 'lt-call'
   },
   {
@@ -6744,7 +6760,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.6e6a6f2086bb",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 584,
+    "line": 632,
     kind: 'lt-call'
   },
   {
@@ -7248,7 +7264,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.77634af5a340",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 583,
+    "line": 631,
     kind: 'lt-call'
   },
   {
@@ -7656,7 +7672,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.7de491bedc6a",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 68,
+    "line": 114,
     kind: 'lt-call'
   },
   {
@@ -7968,7 +7984,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.83b1f1b3673b",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 662,
+    "line": 710,
     kind: 'ltvars-call'
   },
   {
@@ -8088,7 +8104,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.85fbaf17cc58",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 617,
+    "line": 665,
     kind: 'lt-call'
   },
   {
@@ -8104,7 +8120,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.861b14cba741",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 561,
+    "line": 590,
     kind: 'lt-call'
   },
   {
@@ -8681,6 +8697,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     namespace: 'literals',
     "file": "src/app/[locale]/page.tsx",
     "line": 165,
+    kind: 'lt-call'
+  },
+  {
+    "text": "Alternate Company Names",
+    "key": "literal.8f635a9f2660",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 144,
     kind: 'lt-call'
   },
   {
@@ -9416,7 +9440,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.9b33e083f7a4",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 765,
+    "line": 813,
     kind: 'lt-call'
   },
   {
@@ -9840,7 +9864,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.a0db8e68b834",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 595,
+    "line": 643,
     kind: 'lt-call'
   },
   {
@@ -10520,7 +10544,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.ab29c739e487",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 448,
+    "line": 477,
     kind: 'lt-call'
   },
   {
@@ -10713,6 +10737,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     namespace: 'literals',
     "file": "src/app/[locale]/page.tsx",
     "line": 118,
+    kind: 'lt-call'
+  },
+  {
+    "text": "Settings saved",
+    "key": "literal.aef97bb06af4",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 94,
     kind: 'lt-call'
   },
   {
@@ -11448,7 +11480,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.b80ba544702b",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 537,
+    "line": 566,
     kind: 'lt-call'
   },
   {
@@ -11768,7 +11800,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.be6eae0dff37",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 91,
+    "line": 137,
     kind: 'lt-call'
   },
   {
@@ -12320,7 +12352,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.c778b95d258f",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 557,
+    "line": 586,
     kind: 'lt-call'
   },
   {
@@ -12864,7 +12896,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.d016004473e0",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 41,
+    "line": 60,
     kind: 'lt-call'
   },
   {
@@ -13224,7 +13256,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.d4f0f20aea14",
     namespace: 'literals',
     "file": "src/components/settings/tenant-edit-modal.tsx",
-    "line": 69,
+    "line": 115,
     kind: 'lt-call'
   },
   {
@@ -13496,7 +13528,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.d96159ff30af",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 389,
+    "line": 418,
     kind: 'lt-call'
   },
   {
@@ -13520,7 +13552,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.da14931c098c",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 814,
+    "line": 862,
     kind: 'lt-call'
   },
   {
@@ -13692,6 +13724,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     kind: 'lt-call'
   },
   {
+    "text": "Alias saved to database",
+    "key": "literal.dd03399213e7",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 86,
+    kind: 'lt-call'
+  },
+  {
     "text": "All tenants (platform-wide)",
     "key": "literal.dd17d6b1d7da",
     namespace: 'literals',
@@ -13858,6 +13898,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     "file": "src/components/admin/ai-provider-management.tsx",
     "line": 490,
     kind: 'jsx-text'
+  },
+  {
+    "text": "Add alternate name",
+    "key": "literal.dfc0c40b1dae",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 147,
+    kind: 'lt-call'
   },
   {
     "text": "Load more",
@@ -14884,6 +14932,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     kind: 'lt-call'
   },
   {
+    "text": "Possible tenant matches:",
+    "key": "literal.f244206e41c1",
+    namespace: 'literals',
+    "file": "src/components/documents/document-upload.tsx",
+    "line": 447,
+    kind: 'lt-call'
+  },
+  {
     "text": "app_translations",
     "key": "literal.f24612bb4e48",
     namespace: 'literals',
@@ -15136,7 +15192,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.f6ce3b6fcfca",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 581,
+    "line": 629,
     kind: 'lt-call'
   },
   {
@@ -15360,7 +15416,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.f9f38818c406",
     namespace: 'literals',
     "file": "src/components/documents/document-verification-modal.tsx",
-    "line": 580,
+    "line": 628,
     kind: 'lt-call'
   },
   {
@@ -15601,6 +15657,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     namespace: 'literals',
     "file": "src/app/tenant-admin/tenant-admin-client.tsx",
     "line": 102,
+    kind: 'lt-call'
+  },
+  {
+    "text": "Possible tenant matches",
+    "key": "literal.fe26f2daeee6",
+    namespace: 'literals',
+    "file": "src/components/documents/document-verification-modal.tsx",
+    "line": 602,
     kind: 'lt-call'
   },
   {

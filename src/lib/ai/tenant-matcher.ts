@@ -4,6 +4,7 @@ export type TenantCandidate = {
   tenantId?: string
   confidence: number
   reasons: string[]
+  tenantName?: string
 }
 
 export type TenantMatchResult = {
@@ -127,36 +128,66 @@ export async function findTenantCandidates(
     }
   }
 
-  // 3. Match against Tenant Names (Fuzzy-ish)
-  // We can't do full fuzzy search easily without pg_trgm, so we do exact/ilike
-  // But we can check against `tenants` table directly if we have access (service role does)
+  // 3. Match against Tenant Names / Aliases (Fuzzy-ish)
+  // We check the `tenant_identifiers` table for alias/name entries first,
+  // falling back to a simple tenants.name ilike search as a secondary signal.
   if (potentialNames.length > 0) {
-    // This is expensive if many tenants, but okay for now
-    // Better: use a dedicated search index or RPC
     for (const name of potentialNames) {
-      // Guard against very short/common tokens causing lots of false matches
       if (name.length < 3) continue
-      const { data: nameMatches } = await svc
-        .from('tenants')
-        .select('id, name')
-        .in('id', allowedTenantIds)
-        .ilike('name', `%${name.replace(/[%_]/g, (m) => `\\${m}`)}%`)
-        .limit(5)
-      
-      if (nameMatches) {
-        nameMatches.forEach((match: any) => {
-          if (match.id !== currentTenantId) {
-             // Check if we already added this candidate
-             const existing = candidates.find(c => c.tenantId === match.id)
-             if (!existing) {
-               candidates.push({
-                 tenantId: match.id,
-                 confidence: 0.75,
-                 reasons: [`Matched Tenant Name: ${match.name}`]
-               })
-             }
-          }
-        })
+
+      // Match against tenant_identifiers where owners may have added alternate names
+      try {
+        const { data: idMatches } = await svc
+          .from('tenant_identifiers')
+          .select('tenant_id, identifier_value, identifier_type')
+          .in('tenant_id', allowedTenantIds)
+          .in('identifier_type', ['NAME_ALIAS'])
+          .ilike('identifier_value', `%${name.replace(/[%_]/g, (m) => `\\${m}`)}%`)
+          .limit(20)
+
+        if (idMatches && idMatches.length > 0) {
+          idMatches.forEach((match: any) => {
+            if (match.tenant_id !== currentTenantId) {
+              const existing = candidates.find(c => c.tenantId === match.tenant_id)
+              if (!existing) {
+                candidates.push({
+                  tenantId: match.tenant_id,
+                  confidence: 0.78,
+                  reasons: [`Matched Tenant ${match.identifier_type}: ${match.identifier_value}`]
+                })
+              }
+            }
+          })
+        }
+      } catch (e) {
+        // Ignore failures here; we'll fall back to tenants.name search
+      }
+
+      // Secondary: check tenants.name directly for a match
+      try {
+        const { data: nameMatches } = await svc
+          .from('tenants')
+          .select('id, name')
+          .in('id', allowedTenantIds)
+          .ilike('name', `%${name.replace(/[%_]/g, (m) => `\\${m}`)}%`)
+          .limit(5)
+
+        if (nameMatches) {
+          nameMatches.forEach((match: any) => {
+            if (match.id !== currentTenantId) {
+              const existing = candidates.find(c => c.tenantId === match.id)
+              if (!existing) {
+                candidates.push({
+                  tenantId: match.id,
+                  confidence: 0.72,
+                  reasons: [`Matched Tenant Name: ${match.name}`]
+                })
+              }
+            }
+          })
+        }
+      } catch (e) {
+        // swallow
       }
     }
   }
@@ -196,12 +227,25 @@ export async function findTenantCandidates(
   
   // Check if current tenant is mentioned
   const { data: currentTenant } = await svc.from('tenants').select('name').eq('id', currentTenantId).single()
-  const currentTenantName = currentTenant?.name?.toLowerCase()
+  let currentTenantNames: string[] = []
+  try {
+    const { data: aliasRows } = await svc
+      .from('tenant_identifiers')
+      .select('identifier_value')
+      .eq('tenant_id', currentTenantId)
+      .in('identifier_type', ['NAME_ALIAS'])
+      .limit(50)
+    const primary = currentTenant?.name ? String(currentTenant.name).toLowerCase() : ''
+    const aliasArr = Array.isArray(aliasRows) ? aliasRows.map((r: any) => String(r.identifier_value || '').toLowerCase()) : []
+    currentTenantNames = [primary, ...aliasArr].filter((x): x is string => Boolean(x))
+  } catch (e) {
+    const primary = currentTenant?.name ? String(currentTenant.name).toLowerCase() : null
+    currentTenantNames = primary ? [primary] : []
+  }
 
   const isCurrentTenantMentioned =
-    typeof currentTenantName === 'string' &&
-    currentTenantName.trim().length >= 3 &&
-    potentialNames.some((n) => n.includes(currentTenantName) || currentTenantName.includes(n))
+    currentTenantNames.length > 0 &&
+    potentialNames.some((n) => currentTenantNames.some((ct) => n.includes(ct) || ct.includes(n)))
   
   if (candidates.length > 0 && isCurrentTenantMentioned) {
     isMultiTenant = true
@@ -215,6 +259,30 @@ export async function findTenantCandidates(
 
   // Deduplicate candidates
   const uniqueCandidates = Array.from(new Map(candidates.map(c => [c.tenantId, c])).values())
+
+  // Enrich candidates with tenant names for display, best-effort
+  const tenantIds = uniqueCandidates.map((c) => c.tenantId).filter(Boolean) as string[]
+  if (tenantIds.length > 0) {
+    try {
+      const { data: tenants } = await svc
+        .from('tenants')
+        .select('id, name')
+        .in('id', tenantIds)
+
+      const nameMap = new Map<string, string>()
+      if (Array.isArray(tenants)) {
+        tenants.forEach((t: any) => {
+          if (t && t.id) nameMap.set(String(t.id), t.name)
+        })
+      }
+
+      uniqueCandidates.forEach((c) => {
+        if (c.tenantId) c.tenantName = nameMap.get(String(c.tenantId))
+      })
+    } catch (e) {
+      // ignore enrichment failures
+    }
+  }
 
   return {
     candidates: uniqueCandidates,

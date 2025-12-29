@@ -489,6 +489,23 @@ export class AIProcessingService {
 
       // 3. Get Tenant AI Configuration
       const aiConfig = await this.getTenantAIConfig(docRow.tenant_id)
+
+      // Fetch tenant alias/name identifiers to provide to AI prompts
+      let tenantAliases: string[] = []
+      try {
+        const svc = createService()
+        const { data: aliasRows } = await svc
+          .from('tenant_identifiers')
+          .select('identifier_value')
+          .eq('tenant_id', docRow.tenant_id)
+          .in('identifier_type', ['NAME_ALIAS'])
+          .limit(50)
+        if (Array.isArray(aliasRows)) {
+          tenantAliases = aliasRows.map((r: any) => String(r.identifier_value || '').trim()).filter(Boolean)
+        }
+      } catch (e) {
+        tenantAliases = []
+      }
       
       // --- RATE LIMIT CHECK START ---
         if (aiConfig && aiConfig.ai_providers) {
@@ -528,19 +545,19 @@ export class AIProcessingService {
       // Pass the buffer to avoid re-downloading
       if (aiConfig && aiConfig.ai_providers?.name === 'google-document-ai') {
         console.log('Processing with Google Document AI...')
-        extractedData = await this.processWithGoogleDocumentAI(document, aiConfig, supabase, buffer)
+        extractedData = await this.processWithGoogleDocumentAI(document, aiConfig, supabase, buffer, tenantAliases)
       } else if (aiConfig && aiConfig.ai_providers?.name === 'qwen-vision') {
         console.log('Processing with Qwen Vision...')
-        extractedData = await this.processWithQwenVision(document, aiConfig, supabase, buffer, tenantName, tenantLocale)
+        extractedData = await this.processWithQwenVision(document, aiConfig, supabase, buffer, tenantName, tenantLocale, tenantAliases)
       } else if (aiConfig && aiConfig.ai_providers?.name === 'openai-vision') {
         console.log('Processing with OpenAI Vision...')
-        extractedData = await this.processWithOpenAIVision(document, aiConfig, supabase, buffer, tenantName, tenantLocale)
+        extractedData = await this.processWithOpenAIVision(document, aiConfig, supabase, buffer, tenantName, tenantLocale, tenantAliases)
       } else if (aiConfig && aiConfig.ai_providers?.name === 'openrouter') {
         console.log('Processing with OpenRouter...')
-        extractedData = await this.processWithOpenRouter(document, aiConfig, supabase, buffer, tenantName, tenantLocale)
+        extractedData = await this.processWithOpenRouter(document, aiConfig, supabase, buffer, tenantName, tenantLocale, tenantAliases)
       } else if (aiConfig && aiConfig.ai_providers?.name === 'deepseek-ocr') {
         console.log('Processing with DeepSeek OCR...')
-        extractedData = await this.processWithDeepSeek(document, aiConfig, supabase, buffer, tenantName, tenantLocale)
+        extractedData = await this.processWithDeepSeek(document, aiConfig, supabase, buffer, tenantName, tenantLocale, tenantAliases)
       } else {
         throw new Error('No active AI provider configured for this tenant or platform')
       }
@@ -579,7 +596,26 @@ export class AIProcessingService {
       let isMultiTenant = false
       
       if (tenant) {
-        const tenantName = normalizeCompanyName((tenant as { name?: string } | null)?.name || '')
+        // Assemble primary name + aliases for robust matching
+        const svc = createService()
+        const primaryNameRaw = (tenant as { name?: string } | null)?.name || ''
+        let aliasRows: any[] = []
+        try {
+          const { data } = await svc
+            .from('tenant_identifiers')
+            .select('identifier_value')
+            .eq('tenant_id', docRow.tenant_id)
+            .in('identifier_type', ['NAME_ALIAS'])
+            .limit(50)
+          aliasRows = Array.isArray(data) ? data : []
+        } catch (e) {
+          aliasRows = []
+        }
+
+        const tenantNames = [primaryNameRaw, ...aliasRows.map((r: any) => r.identifier_value || '')]
+          .map(normalizeCompanyName)
+          .filter(Boolean)
+
         const vendorName = normalizeCompanyName(extractedData.vendor_name)
         const customerName = normalizeCompanyName(extractedData.customer_name)
 
@@ -606,7 +642,7 @@ export class AIProcessingService {
            if (extractedData.document_type === 'bank_statement') {
               // For bank statements, check account holder name if available
               const accountHolder = normalizeCompanyName(extractedData.account_holder_name)
-              if (accountHolder && nameIncludes(accountHolder, tenantName)) {
+                if (accountHolder && tenantNames.some(tn => nameIncludes(accountHolder, tn))) {
                   isTenantMatch = true
               } else if (extractedData.account_number) {
                   // If we have an account number, check if it matches any of our bank accounts
@@ -620,9 +656,9 @@ export class AIProcessingService {
               if (!isTenantMatch && !accountHolder) {
                   const vendor = vendorName
                   const customer = customerName
-                  if (nameIncludes(vendor, tenantName) || nameIncludes(customer, tenantName)) {
+                    if (tenantNames.some(tn => nameIncludes(vendor, tn) || nameIncludes(customer, tn))) {
                       isTenantMatch = true
-                  }
+                    }
               }
 
               // If we still don't have a match, but it's a bank statement, we might be more lenient
@@ -634,8 +670,8 @@ export class AIProcessingService {
               }
            } else {
                // Standard Invoice/Receipt logic
-               const isTenantVendor = vendorName && tenantName ? nameIncludes(vendorName, tenantName) : false
-               const isTenantCustomer = customerName && tenantName ? nameIncludes(customerName, tenantName) : false
+               const isTenantVendor = vendorName && tenantNames.length > 0 ? tenantNames.some(tn => nameIncludes(vendorName, tn)) : false
+               const isTenantCustomer = customerName && tenantNames.length > 0 ? tenantNames.some(tn => nameIncludes(customerName, tn)) : false
                isTenantMatch = isTenantVendor || isTenantCustomer
            }
         }
@@ -656,8 +692,8 @@ export class AIProcessingService {
             const hasCustomer = customerName.length >= 2
             const hasExplicitBelongs = typeof extractedData.is_belongs_to_tenant === 'boolean'
             const explicitMismatch = hasExplicitBelongs && extractedData.is_belongs_to_tenant === false
-            const vendorMatchesTenant = hasVendor ? nameIncludes(vendorName, tenantName) : false
-            const customerMatchesTenant = hasCustomer ? nameIncludes(customerName, tenantName) : false
+            const vendorMatchesTenant = hasVendor ? tenantNames.some(tn => nameIncludes(vendorName, tn)) : false
+            const customerMatchesTenant = hasCustomer ? tenantNames.some(tn => nameIncludes(customerName, tn)) : false
             const strongStringMismatch = (hasVendor && hasCustomer && !vendorMatchesTenant && !customerMatchesTenant) || (hasCustomer && !customerMatchesTenant)
 
             const shouldInvestigateMismatch =
@@ -679,7 +715,7 @@ export class AIProcessingService {
             })
 
             if (shouldInvestigateMismatch) {
-              console.log(`Potential wrong tenant detected. Tenant: ${tenantName}`)
+              console.log(`Potential wrong tenant detected. Tenant: ${primaryNameRaw || 'unknown'}`)
 
               const fromTenantId = docRow.tenant_id
 
@@ -728,6 +764,22 @@ export class AIProcessingService {
                 if (canAutoReassign) {
                   const toTenantId = String(bestCandidate.tenantId)
                   const { data: toTenant } = await svc.from('tenants').select('name').eq('id', toTenantId).maybeSingle()
+                  // Prefer a configured alias for display if available
+                  let displayName = toTenant?.name
+                  try {
+                    const { data: aliasRows2 } = await svc
+                      .from('tenant_identifiers')
+                      .select('identifier_value')
+                      .eq('tenant_id', toTenantId)
+                      .in('identifier_type', ['NAME_ALIAS'])
+                      .limit(5)
+                    if (Array.isArray(aliasRows2) && aliasRows2.length > 0) {
+                      displayName = aliasRows2[0].identifier_value || displayName
+                    }
+                  } catch (e) {
+                    // ignore alias fetch failures
+                  }
+
                   const rpcRes = await rpc('transfer_document_tenant', {
                     p_document_id: documentId,
                     p_target_tenant_id: toTenantId,
@@ -745,7 +797,7 @@ export class AIProcessingService {
                       actionTaken: 'REASSIGNED',
                       fromTenantId,
                       toTenantId,
-                      toTenantName: toTenant?.name ?? undefined,
+                      toTenantName: displayName ?? toTenant?.name ?? undefined,
                     }
                   }
                 }
@@ -778,10 +830,31 @@ export class AIProcessingService {
                         .eq('owner_id', ownerId)
                         .limit(50)
 
-                      const existing = (Array.isArray(existingTenants) ? existingTenants : []).find((t: any) => {
+                      let existing: any = null
+                      const rows = Array.isArray(existingTenants) ? existingTenants : []
+                      for (const t of rows) {
                         const n = normalizeCompanyName(t?.name)
-                        return n.length > 0 && n === normalizedSuggested
-                      })
+                        if (n.length > 0 && n === normalizedSuggested) {
+                          existing = t
+                          break
+                        }
+                        // Check aliases for this tenant
+                        try {
+                          const { data: arows } = await svc
+                            .from('tenant_identifiers')
+                            .select('identifier_value')
+                            .eq('tenant_id', t.id)
+                            .in('identifier_type', ['NAME_ALIAS'])
+                            .limit(20)
+                          const aliases = Array.isArray(arows) ? arows.map((r:any) => normalizeCompanyName(r.identifier_value || '')) : []
+                          if (aliases.includes(normalizedSuggested)) {
+                            existing = t
+                            break
+                          }
+                        } catch (e) {
+                          // ignore alias fetch errors
+                        }
+                      }
 
                       if (existing?.id) {
                         const toTenantId = String(existing.id)
@@ -1075,7 +1148,8 @@ export class AIProcessingService {
     document: Document,
     config: any,
     supabase: any,
-    fileBuffer?: Buffer
+    fileBuffer?: Buffer,
+    tenantAliases?: string[]
   ): Promise<ExtractedData> {
     try {
       let content: string
@@ -1198,7 +1272,8 @@ export class AIProcessingService {
     supabase: any,
     fileBuffer?: Buffer,
     tenantName?: string,
-    tenantLocale?: string
+    tenantLocale?: string,
+    tenantAliases?: string[]
   ): Promise<ExtractedData> {
     const customConfig = this.resolveMergedProviderConfig(config)
     const apiKey = this.resolveApiKey(config)
@@ -1207,7 +1282,7 @@ export class AIProcessingService {
     const baseURL = customConfig.baseUrl || 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
     const model = this.resolveModelName(config, 'qwen-vl-max')
 
-    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale)
+    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale, tenantAliases)
   }
 
   /**
@@ -1219,7 +1294,8 @@ export class AIProcessingService {
     supabase: any,
     fileBuffer?: Buffer,
     tenantName?: string,
-    tenantLocale?: string
+    tenantLocale?: string,
+    tenantAliases?: string[]
   ): Promise<ExtractedData> {
     const customConfig = this.resolveMergedProviderConfig(config)
     const apiKey = this.resolveApiKey(config)
@@ -1230,7 +1306,7 @@ export class AIProcessingService {
     const baseURL = customConfig.baseUrl 
     const model = this.resolveModelName(config, 'gpt-4-vision-preview')
 
-    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale)
+    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale, tenantAliases)
   }
 
   /**
@@ -1242,7 +1318,8 @@ export class AIProcessingService {
     supabase: any,
     fileBuffer?: Buffer,
     tenantName?: string,
-    tenantLocale?: string
+    tenantLocale?: string,
+    tenantAliases?: string[]
   ): Promise<ExtractedData> {
     const customConfig = this.resolveMergedProviderConfig(config)
     const apiKey = this.resolveApiKey(config)
@@ -1257,7 +1334,7 @@ export class AIProcessingService {
       "X-Title": "LedgerAI"
     }
     
-    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale, extraHeaders)
+    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale, tenantAliases, extraHeaders)
   }
 
   /**
@@ -1269,7 +1346,8 @@ export class AIProcessingService {
     supabase: any,
     fileBuffer?: Buffer,
     tenantName?: string,
-    tenantLocale?: string
+    tenantLocale?: string,
+    tenantAliases?: string[]
   ): Promise<ExtractedData> {
     const customConfig = this.resolveMergedProviderConfig(config)
     const apiKey = this.resolveApiKey(config)
@@ -1281,7 +1359,7 @@ export class AIProcessingService {
     // Warning: DeepSeek's main models (deepseek-chat) do not support Vision yet.
     // This will likely fail unless the user provides a custom model that supports it.
     
-    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale)
+    return this.processWithOpenAICompatibleVision(document, apiKey, baseURL, model, supabase, fileBuffer, tenantName, tenantLocale, tenantAliases)
   }
 
   /**
@@ -1297,6 +1375,7 @@ export class AIProcessingService {
     fileBuffer?: Buffer,
     tenantName?: string,
     tenantLocale?: string,
+    tenantAliases?: string[],
     defaultHeaders?: Record<string, string>
   ): Promise<ExtractedData> {
     try {
@@ -1331,10 +1410,15 @@ export class AIProcessingService {
       const outputLanguage = resolveTenantLanguageLabel(normalizedTenantLocale)
 
       // 4. Construct Prompt
+      const aliasNote = Array.isArray(tenantAliases) && tenantAliases.length > 0
+        ? `Known alternate names for the tenant: ${tenantAliases.map(a => `"${a}"`).join(', ')}.`
+        : ''
+
       const systemPrompt = `You are an expert accounting AI. Extract data from this ${document.document_type || 'document'} into JSON format.
       Return ONLY valid JSON with no markdown formatting.
       
       The name of the company/tenant that owns this document is: "${tenantName || 'Unknown'}".
+      ${aliasNote}
 
       OUTPUT LANGUAGE (TENANT LOCALE):
       - The tenant locale is "${normalizedTenantLocale}". Write all natural-language descriptive fields in ${outputLanguage}.
@@ -1349,7 +1433,7 @@ export class AIProcessingService {
       - Keep numbers as numbers (no locale separators) and dates as YYYY-MM-DD.
       
       CRITICAL - TENANT VALIDATION:
-      - Check if the document belongs to "${tenantName || 'Unknown'}". Look for the company name in the "Bill To", "Ship To", or "Receiver" fields.
+      - Check if the document belongs to "${tenantName || 'Unknown'}". Look for the company name or any of its known alternate names in the "Bill To", "Ship To", or "Receiver" fields.
       - Set "is_belongs_to_tenant" to true if found, false otherwise.
       - Also provide a "confidence_score" (0.0 to 1.0) indicating how confident you are in the extraction and validation.
       
@@ -1380,9 +1464,9 @@ export class AIProcessingService {
       - Extract "line_items" (array of {description, amount, quantity})
       
       CRITICAL - DETERMINE TRANSACTION TYPE:
-      - Compare "vendor_name" and "customer_name" with the tenant name: "${tenantName || 'Unknown'}".
-      - If the "vendor_name" is similar to "${tenantName}", then this is an OUTGOING invoice (Sales), so set "transaction_type" to "income".
-      - If the "customer_name" is similar to "${tenantName}", then this is an INCOMING invoice (Purchase), so set "transaction_type" to "expense".
+      - Compare "vendor_name" and "customer_name" with the tenant name and its known alternates: "${tenantName || 'Unknown'}".
+      - If the "vendor_name" is similar to the tenant name or any alternate, then this is an OUTGOING invoice (Sales), so set "transaction_type" to "income".
+      - If the "customer_name" is similar to the tenant name or any alternate, then this is an INCOMING invoice (Purchase), so set "transaction_type" to "expense".
       - If uncertain, default to "expense".`
 
       // 5. Call API

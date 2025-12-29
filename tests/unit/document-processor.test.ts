@@ -74,8 +74,8 @@ describe('AIProcessingService.processDocument', () => {
   it('skips creating a new transaction for duplicate without existing transaction', async () => {
     // Arrange
     const typed = await import('@/lib/supabase/typed')
-    typed.findDocumentsByTenantAndHash.mockResolvedValue({ data: [{ id: 'orig-doc' }] })
-    typed.findTransactionByDocumentId.mockResolvedValue({ data: null })
+    ;(typed.findDocumentsByTenantAndHash as any).mockResolvedValue({ data: [{ id: 'orig-doc' }] })
+    ;(typed.findTransactionByDocumentId as any).mockResolvedValue({ data: null })
 
     // Stub provider processing to return minimal extracted data
     vi.spyOn(AIProcessingService as any, 'processWithOpenAIVision').mockResolvedValue({
@@ -104,8 +104,8 @@ describe('AIProcessingService.processDocument', () => {
 
   it('updates existing transaction when duplicate has existing transaction', async () => {
     const typed = await import('@/lib/supabase/typed')
-    typed.findDocumentsByTenantAndHash.mockResolvedValue({ data: [{ id: 'orig-doc' }] })
-    typed.findTransactionByDocumentId.mockResolvedValue({ data: { id: 'tx-123' } })
+    ;(typed.findDocumentsByTenantAndHash as any).mockResolvedValue({ data: [{ id: 'orig-doc' }] })
+    ;(typed.findTransactionByDocumentId as any).mockResolvedValue({ data: { id: 'tx-123' } })
 
     vi.spyOn(AIProcessingService as any, 'processWithOpenAIVision').mockResolvedValue({
       document_type: 'invoice',
@@ -128,8 +128,8 @@ describe('AIProcessingService.processDocument', () => {
   it('skips creating records when wrong tenant not auto-corrected', async () => {
     // Make no duplicates
     const typed = await import('@/lib/supabase/typed')
-    typed.findDocumentsByTenantAndHash.mockResolvedValue({ data: [] })
-    typed.findTransactionByDocumentId.mockResolvedValue({ data: null })
+    ;(typed.findDocumentsByTenantAndHash as any).mockResolvedValue({ data: [] })
+    ;(typed.findTransactionByDocumentId as any).mockResolvedValue({ data: null })
 
     // Return extracted data that indicates mismatch
     vi.spyOn(AIProcessingService as any, 'processWithOpenAIVision').mockResolvedValue({
@@ -144,7 +144,7 @@ describe('AIProcessingService.processDocument', () => {
 
     // Ensure tenant matcher returns no candidates
     const tenantMatcher = await import('@/lib/ai/tenant-matcher')
-    tenantMatcher.findTenantCandidates.mockResolvedValue({ candidates: [], isMultiTenant: false, suggestedTenantName: null })
+    ;(tenantMatcher.findTenantCandidates as any).mockResolvedValue({ candidates: [], isMultiTenant: false, suggestedTenantName: null })
 
     const draftSpy = vi.spyOn(AIProcessingService as any, 'createDraftTransaction').mockResolvedValue(undefined)
 
@@ -156,8 +156,8 @@ describe('AIProcessingService.processDocument', () => {
 
   it('auto-reassigns and creates records when wrong tenant auto-corrects', async () => {
     const typed = await import('@/lib/supabase/typed')
-    typed.findDocumentsByTenantAndHash.mockResolvedValue({ data: [] })
-    typed.findTransactionByDocumentId.mockResolvedValue({ data: null })
+    ;(typed.findDocumentsByTenantAndHash as any).mockResolvedValue({ data: [] })
+    ;(typed.findTransactionByDocumentId as any).mockResolvedValue({ data: null })
 
     vi.spyOn(AIProcessingService as any, 'processWithOpenAIVision').mockResolvedValue({
       document_type: 'invoice',
@@ -171,17 +171,17 @@ describe('AIProcessingService.processDocument', () => {
 
     // Provide a candidate with high confidence
     const tenantMatcher = await import('@/lib/ai/tenant-matcher')
-    tenantMatcher.findTenantCandidates.mockResolvedValue({
+    ;(tenantMatcher.findTenantCandidates as any).mockResolvedValue({
       candidates: [{ tenantId: 'tenant-2', confidence: 0.95 }],
       isMultiTenant: false,
       suggestedTenantName: 'Tenant B'
     })
 
     // make rpc transfer succeed
-    typed.rpc.mockResolvedValue({})
+    ;(typed.rpc as any).mockResolvedValue({})
 
     // Ensure createService returns a client that can select tenant name and insert candidates
-    typed.createService.mockImplementation(() => ({
+    ;(typed.createService as any).mockImplementation(() => ({
       from: (table: string) => {
         const t: any = {}
         t.select = () => t

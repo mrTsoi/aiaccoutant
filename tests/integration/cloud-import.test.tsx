@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/hooks/use-tenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant-1' } }) }))
 
 // Mock literals hook
-vi.mock('@/hooks/use-literals', () => ({ useLiterals: () => (s => s) }))
+vi.mock('@/hooks/use-literals', () => ({ useLiterals: () => ((s: string) => s) }))
 
 // Mock next/navigation app router
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }))

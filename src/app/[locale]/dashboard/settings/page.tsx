@@ -1,6 +1,7 @@
 "use client"
 
-import { useSearchParams } from 'next/navigation'
+import React from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { TenantSettings } from '@/components/settings/tenant-settings'
 import TenantManagement from '@/components/settings/tenant-management'
 import { BatchProcessingConfig } from '@/components/settings/batch-processing-config'
@@ -23,6 +24,8 @@ import { useUserRole } from '@/hooks/use-tenant'
 export default function SettingsPage() {
   const lt = useLiterals()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const { subscription, loading: subLoading } = useSubscription()
 
   const hasCustomDomain = subscription?.features?.custom_domain === true
@@ -44,6 +47,29 @@ export default function SettingsPage() {
   }
 
   const defaultTab = isAllowedTab(requestedTab) ? requestedTab : 'profile'
+  const [tab, setTab] = React.useState<string>(defaultTab)
+
+  // keep local tab state in sync with URL params
+  React.useEffect(() => {
+    const sp = searchParams.get('tab') || 'profile'
+    const wanted = isAllowedTab(sp) ? sp : 'profile'
+    if (wanted !== tab) setTab(wanted)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  const handleTabChange = (v: string) => {
+    if (!isAllowedTab(v)) return
+    setTab(v)
+    try {
+      const params = new URLSearchParams(Array.from(searchParams.entries()))
+      params.set('tab', v)
+      const qs = params.toString()
+      router.replace(`${pathname}${qs ? `?${qs}` : ''}`)
+    } catch (e) {
+      // fallback: simple replace
+      router.replace(`${pathname}?tab=${encodeURIComponent(v)}`)
+    }
+  }
   const userRole = useUserRole()
   const canSeeTenantAdmin = ['COMPANY_ADMIN', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(userRole || '')
 
@@ -52,7 +78,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">{lt('Settings')}</h1>
       </div>
-      <Tabs defaultValue={defaultTab} className="space-y-4">
+      <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="profile">{lt('Profile')}</TabsTrigger>
           <TabsTrigger value="security">{lt('Security')}</TabsTrigger>

@@ -903,8 +903,6 @@ export function DocumentsList({ onVerify, refreshKey }: Props) {
                               <AlertTriangle className="w-3 h-3" />
                               <span>
                                 {doc.validation_flags?.includes('DUPLICATE_DOCUMENT') ? ltVars('Duplicate  ') : ''}
-                                {doc.validation_flags?.includes('WRONG_TENANT') ? ltVars('Wrong Tenant ') : ''} 
-                                {doc.validation_flags?.includes('Review Needed') ? ltVars('Review Needed') : ''} 
                               </span>
                             </div>
                           )}

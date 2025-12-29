@@ -33,6 +33,7 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
 
   const [document, setDocument] = useState<Document | null>(null)
   const [docData, setDocData] = useState<DocumentData | null>(null)
+  const [tenantCandidates, setTenantCandidates] = useState<Array<any>>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -156,6 +157,34 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
           }))
         } else {
           setBankTransactions([])
+        }
+        // Fetch tenant candidates (if any)
+        try {
+          const { data: candidates } = await supabase
+            .from('document_tenant_candidates')
+            .select('candidate_tenant_id, suggested_tenant_name, confidence, reasons')
+            .eq('document_id', documentId)
+
+          const rows = Array.isArray(candidates) ? candidates : []
+          // Enrich with tenant names for display
+          const tenantIds = rows.map((r: any) => r.candidate_tenant_id).filter(Boolean)
+          if (tenantIds.length > 0) {
+            const { data: tenants } = await supabase
+              .from('tenants')
+              .select('id, name')
+              .in('id', tenantIds)
+            const nameMap = new Map<string, string>()
+            if (Array.isArray(tenants)) tenants.forEach((t: any) => nameMap.set(String(t.id), t.name))
+            const enriched = rows.map((r: any) => ({
+              ...r,
+              tenantName: r.candidate_tenant_id ? nameMap.get(String(r.candidate_tenant_id)) : null
+            }))
+            setTenantCandidates(enriched)
+          } else {
+            setTenantCandidates(rows)
+          }
+        } catch (e) {
+          setTenantCandidates([])
         }
       }
     } catch (error) {
@@ -565,6 +594,25 @@ export function DocumentVerificationModal({ documentId, onClose, onSaved }: Prop
                   ))}
                 </ul>
               </div>
+            </div>
+          )}
+
+          {tenantCandidates && tenantCandidates.length > 0 && (
+            <div className="bg-yellow-25 border border-yellow-100 rounded-md p-3">
+              <h4 className="text-sm font-medium text-yellow-800">{lt('Possible tenant matches')}</h4>
+              <ul className="mt-2 space-y-2">
+                {tenantCandidates.map((c: any, i: number) => (
+                  <li key={i} className="p-2 bg-yellow-50 border rounded">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold truncate">{c.tenantName || c.suggested_tenant_name || c.candidate_tenant_id || lt('Unknown')}</div>
+                      <div className="text-xs text-gray-600">{Math.round((c.confidence || 0) * 100)}%</div>
+                    </div>
+                    {c.reasons && c.reasons.length > 0 && (
+                      <div className="text-xs text-gray-600 mt-1">{(c.reasons || []).join('; ')}</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

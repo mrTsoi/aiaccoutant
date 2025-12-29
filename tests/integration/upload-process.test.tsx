@@ -10,7 +10,7 @@ vi.mock('@/hooks/use-tenant', () => ({ useTenant: () => ({ currentTenant: { id: 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => {}, push: () => {} }) }))
 
 // Mock literals hook to return identity
-vi.mock('@/hooks/use-literals', () => ({ useLiterals: () => (s => s) }))
+vi.mock('@/hooks/use-literals', () => ({ useLiterals: () => ((s: string) => s) }))
 
 // Mock batch config
 vi.mock('@/hooks/use-batch-config', () => ({ useBatchConfig: () => ({ batchSize: 100 }), chunkArray: (arr: any) => [arr] }))

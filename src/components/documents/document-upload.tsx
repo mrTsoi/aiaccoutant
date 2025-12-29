@@ -441,6 +441,25 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
                     </div>
                   </div>
                 )}
+                {/* Tenant Candidate Details */}
+                {file.status === 'needs_review' && file.tenantCandidates && file.tenantCandidates.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm font-medium text-yellow-700">{lt('Possible tenant matches:')}</div>
+                    <ul className="mt-2 space-y-2">
+                      {file.tenantCandidates.map((c, idx) => (
+                        <li key={idx} className="p-2 border rounded bg-yellow-50">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold truncate">{(c as any).tenantName || c.tenantId || lt('Unknown')}</div>
+                            <div className="text-xs text-gray-600">{Math.round((c.confidence || 0) * 100)}%</div>
+                          </div>
+                          {c.reasons && c.reasons.length > 0 && (
+                            <div className="text-xs text-gray-600 mt-1">{c.reasons.join('; ')}</div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             ))}
           </div>
