@@ -375,10 +375,6 @@ export function TenantManagement() {
             t => t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
             t.slug.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  /*const filteredTenants = tenants.filter(tenant =>
-    (tenant.name && tenant.name.toLowerCase().includes(searchTerm?.toLowerCase())) ||
-    (tenant.slug && tenant.slug.toLowerCase().includes(searchTerm?.toLowerCase()))
-  )*/
 
   if (loading) {
     return (
