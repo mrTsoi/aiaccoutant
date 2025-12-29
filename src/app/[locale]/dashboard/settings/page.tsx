@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import { TenantSettings } from '@/components/settings/tenant-settings'
+import TenantManagement from '@/components/settings/tenant-management'
 import { BatchProcessingConfig } from '@/components/settings/batch-processing-config'
 import { ExchangeRateList } from '@/components/settings/exchange-rate-list'
 import { AISettings } from '@/components/settings/ai-settings'
@@ -17,6 +18,7 @@ import { TaxSettings } from '@/components/settings/tax-settings'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useLiterals } from '@/hooks/use-literals'
 import { useSubscription } from '@/hooks/use-subscription'
+import { useUserRole } from '@/hooks/use-tenant'
 
 export default function SettingsPage() {
   const lt = useLiterals()
@@ -42,6 +44,8 @@ export default function SettingsPage() {
   }
 
   const defaultTab = isAllowedTab(requestedTab) ? requestedTab : 'profile'
+  const userRole = useUserRole()
+  const canSeeTenantAdmin = ['COMPANY_ADMIN', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(userRole || '')
 
   return (
     <div className="space-y-6">
@@ -70,7 +74,12 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="general" className="space-y-4">
-          <TenantSettings />
+          {/* Show the company profile settings only for non-admin users; admins manage via the tenant management table below */}
+          {!canSeeTenantAdmin && <TenantSettings />}
+          {/* Tenant management merged into the Tenant tab for admins */}
+          {canSeeTenantAdmin && (
+            <TenantManagement />
+          )}
           <BatchProcessingConfig />
           <TenantMismatchPolicyTenantSettings />
           <ExchangeRateList />
@@ -108,6 +117,8 @@ export default function SettingsPage() {
             <TaxSettings />
           </TabsContent>
         )}
+
+        {/* tenant-admin tab removed: merged into 'Tenant' general tab */}
       </Tabs>
     </div>
   )

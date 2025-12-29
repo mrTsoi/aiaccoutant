@@ -767,8 +767,8 @@ export const literalsManifest: LiteralManifestItem[] = [
     "text": "The URL slug cannot be changed.",
     "key": "literal.0e052e733688",
     namespace: 'literals',
-    "file": "src/components/settings/tenant-settings.tsx",
-    "line": 99,
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 81,
     kind: 'lt-call'
   },
   {
@@ -1575,8 +1575,8 @@ export const literalsManifest: LiteralManifestItem[] = [
     "text": "URL Slug",
     "key": "literal.1e05ce61911f",
     namespace: 'literals',
-    "file": "src/components/settings/tenant-settings.tsx",
-    "line": 92,
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 79,
     kind: 'lt-call'
   },
   {
@@ -1800,7 +1800,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.218887269ad5",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 334,
+    "line": 342,
     kind: 'lt-call'
   },
   {
@@ -1976,7 +1976,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.239dce622324",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 618,
+    "line": 668,
     kind: 'lt-call'
   },
   {
@@ -2080,7 +2080,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.2534ff64e141",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 59,
+    "line": 63,
     kind: 'lt-call'
   },
   {
@@ -2368,7 +2368,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.2a52803bae2c",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 60,
+    "line": 64,
     kind: 'lt-call'
   },
   {
@@ -2784,7 +2784,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.31dd24b0a61a",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 597,
+    "line": 647,
     kind: 'lt-call'
   },
   {
@@ -3152,7 +3152,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.36bae31694f8",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 322,
+    "line": 328,
     kind: 'lt-call'
   },
   {
@@ -3544,7 +3544,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.3ca93c78f671",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 55,
+    "line": 59,
     kind: 'lt-call'
   },
   {
@@ -3696,7 +3696,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.3ec1ae061c27",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 587,
+    "line": 637,
     kind: 'lt-call'
   },
   {
@@ -3842,6 +3842,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     "file": "src/components/settings/external-sources-settings.tsx",
     "line": 1149,
     kind: 'jsx-text'
+  },
+  {
+    "text": "Banks",
+    "key": "literal.42f57a69c27f",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-management.tsx",
+    "line": 197,
+    kind: 'lt-call'
   },
   {
     "text": "Powerful features built for modern businesses and accounting firms.",
@@ -4088,7 +4096,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.467f0c7ca296",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 744,
+    "line": 794,
     kind: 'lt-call'
   },
   {
@@ -4600,7 +4608,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.4e7afebcfbae",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 730,
+    "line": 357,
     kind: 'lt-call'
   },
   {
@@ -5120,7 +5128,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.5656400564f2",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 649,
+    "line": 699,
     kind: 'lt-call'
   },
   {
@@ -5904,7 +5912,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.61e4c27b1cb8",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 478,
+    "line": 497,
     kind: 'lt-call'
   },
   {
@@ -5935,8 +5943,8 @@ export const literalsManifest: LiteralManifestItem[] = [
     "text": "Locale / Region",
     "key": "literal.62c51d552f4c",
     namespace: 'literals',
-    "file": "src/components/settings/tenant-settings.tsx",
-    "line": 104,
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 86,
     kind: 'lt-call'
   },
   {
@@ -6176,7 +6184,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.66c7e11f0a5d",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 58,
+    "line": 62,
     kind: 'lt-call'
   },
   {
@@ -6656,7 +6664,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.6d6dc053cb7c",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 597,
+    "line": 647,
     kind: 'lt-call'
   },
   {
@@ -6736,7 +6744,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.6e78c91f5a05",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 552,
+    "line": 602,
     kind: 'lt-call'
   },
   {
@@ -6784,7 +6792,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.6f2a352be845",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 445,
+    "line": 464,
     kind: 'lt-call'
   },
   {
@@ -7360,7 +7368,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.7a1994999d18",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 488,
+    "line": 507,
     kind: 'lt-call'
   },
   {
@@ -7512,7 +7520,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.7cbbc6ca9723",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 341,
+    "line": 350,
     kind: 'lt-call'
   },
   {
@@ -7633,6 +7641,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     namespace: 'literals',
     "file": "src/components/settings/automated-sync-settings.tsx",
     "line": 107,
+    kind: 'lt-call'
+  },
+  {
+    "text": "Edit Company",
+    "key": "literal.7de491bedc6a",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 68,
     kind: 'lt-call'
   },
   {
@@ -8632,7 +8648,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.8e86cf3e8f2d",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 438,
+    "line": 457,
     kind: 'lt-call'
   },
   {
@@ -9456,7 +9472,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.9be70f66f8dd",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 61,
+    "line": 65,
     kind: 'lt-call'
   },
   {
@@ -9800,7 +9816,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.a0d641b3f1af",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 56,
+    "line": 60,
     kind: 'lt-call'
   },
   {
@@ -9872,7 +9888,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.a168a081a3f1",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 517,
+    "line": 567,
     kind: 'lt-call'
   },
   {
@@ -11216,7 +11232,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.b5639cdd4cb7",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 447,
+    "line": 466,
     kind: 'lt-call'
   },
   {
@@ -11544,7 +11560,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.b9efb9769f35",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 57,
+    "line": 61,
     kind: 'lt-call'
   },
   {
@@ -11743,8 +11759,8 @@ export const literalsManifest: LiteralManifestItem[] = [
     "text": "Base Currency",
     "key": "literal.be6eae0dff37",
     namespace: 'literals',
-    "file": "src/components/settings/tenant-settings.tsx",
-    "line": 113,
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 91,
     kind: 'lt-call'
   },
   {
@@ -12836,6 +12852,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     kind: 'lt-call'
   },
   {
+    "text": "Permission denied",
+    "key": "literal.d016004473e0",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 41,
+    kind: 'lt-call'
+  },
+  {
     "text": "Failed to remove member",
     "key": "literal.d02ff7dc1f13",
     namespace: 'literals',
@@ -13188,6 +13212,14 @@ export const literalsManifest: LiteralManifestItem[] = [
     kind: 'lt-call'
   },
   {
+    "text": "Edit tenant company settings.",
+    "key": "literal.d4f0f20aea14",
+    namespace: 'literals',
+    "file": "src/components/settings/tenant-edit-modal.tsx",
+    "line": 69,
+    kind: 'lt-call'
+  },
+  {
     "text": "Select current folder",
     "key": "literal.d4f6924a09b6",
     namespace: 'literals',
@@ -13392,7 +13424,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.d87f47b47e4d",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 298,
+    "line": 300,
     kind: 'lt-call'
   },
   {
@@ -14128,7 +14160,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.e54ccf6e0322",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 596,
+    "line": 646,
     kind: 'lt-call'
   },
   {
@@ -14384,7 +14416,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.ea07380c1ffa",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 425,
+    "line": 444,
     kind: 'lt-call'
   },
   {
@@ -14856,7 +14888,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.f25ce1b8a399",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 54,
+    "line": 58,
     kind: 'lt-call'
   },
   {
@@ -15656,7 +15688,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.ff4fc0276e96",
     namespace: 'literals',
     "file": "src/app/[locale]/dashboard/settings/page.tsx",
-    "line": 53,
+    "line": 57,
     kind: 'lt-call'
   },
   {
@@ -15704,7 +15736,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.fff5a7e212e9",
     namespace: 'literals',
     "file": "src/components/dashboard/dashboard-layout.tsx",
-    "line": 316,
+    "line": 321,
     kind: 'lt-call'
   }
 ]

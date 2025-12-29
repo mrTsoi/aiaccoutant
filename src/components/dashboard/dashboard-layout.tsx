@@ -27,6 +27,7 @@ import {
   ChevronsUpDown,
   Loader2
 } from 'lucide-react'
+
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from "@/lib/utils"
 import {
@@ -408,7 +409,7 @@ export default function DashboardLayout({
 
   return (
     <DashboardPersonalizationProvider value={personalizationValue}>
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -605,7 +606,7 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main Content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 overflow-hidden min-h-0">
         {/* Top Bar */}
         <header className="h-16 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between h-full px-4 md:px-6">
@@ -797,7 +798,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
           {children}
         </main>
 

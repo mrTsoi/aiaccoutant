@@ -1,7 +1,8 @@
-import TenantAdminClient from './tenant-admin-client'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
 export default function Page() {
-  return <TenantAdminClient />
+  // Redirect legacy route to consolidated Settings tab
+  redirect('/dashboard/settings?tab=tenant-admin')
 }
