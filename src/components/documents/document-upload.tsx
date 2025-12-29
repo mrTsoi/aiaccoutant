@@ -35,6 +35,7 @@ interface UploadFile {
     toTenantName?: string
     message?: string
   }
+  recordsCreated?: boolean
 }
 
 const ALLOWED_TYPES = [
@@ -161,6 +162,7 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
       const tenantCandidates = Array.isArray(result.tenantCandidates) ? result.tenantCandidates : []
       const isMultiTenant = Boolean(result.isMultiTenant)
       const tenantCorrection = (result?.tenantCorrection || { actionTaken: 'NONE' }) as UploadFile['tenantCorrection']
+      const recordsCreated = typeof result.recordsCreated === 'boolean' ? result.recordsCreated : true
 
       const hasWrongTenantFlag = flags.includes('WRONG_TENANT')
       const tenantHint =
@@ -192,7 +194,8 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
           validationFlags: flags,
           tenantCandidates,
           isMultiTenant,
-          tenantCorrection
+          tenantCorrection,
+          recordsCreated
         } : f
       ))
 
@@ -408,6 +411,17 @@ export function DocumentUpload({ onVerify, onUploadComplete }: Props) {
                     >
                       {lt('Review')}
                     </Button>
+                  )}
+                  {/* If processing skipped creating records, surface to user */}
+                  {file.recordsCreated === false && file.documentId && (
+                    <div className="ml-2 flex items-center gap-2">
+                      <span className="text-xs text-red-600">{lt('No transaction created — review required')}</span>
+                      {onVerify && (
+                        <Button size="sm" variant="outline" onClick={() => onVerify(file.documentId!)}>
+                          {lt('Review')}
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
                 

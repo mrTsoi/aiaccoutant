@@ -27,6 +27,27 @@ export default function TenantManagement() {
   const [editOpen, setEditOpen] = useState(false)
   const [statsByTenant, setStatsByTenant] = useState<Record<string, { documents: number; transactions: number; bank_accounts: number; users: number }>>({})
 
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const ids = (tenants || []).map((t: any) => t.id).filter(Boolean)
+        if (ids.length === 0) return
+        const res = await fetch('/api/tenant-admin/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantIds: ids }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json?.error || 'Failed to fetch stats')
+        setStatsByTenant(json.stats || {})
+      } catch (e: any) {
+        console.error('Error loading tenant stats', e)
+      }
+    }
+
+    loadStats()
+  }, [tenants])
+
   const fetchDocuments = async (tenantId: string) => {
     setDocLoading(tenantId);
     try {
@@ -148,27 +169,6 @@ export default function TenantManagement() {
       </Card>
     );
   }
-
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const ids = (tenants || []).map((t: any) => t.id).filter(Boolean)
-        if (ids.length === 0) return
-        const res = await fetch('/api/tenant-admin/stats', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenantIds: ids }),
-        })
-        const json = await res.json()
-        if (!res.ok) throw new Error(json?.error || 'Failed to fetch stats')
-        setStatsByTenant(json.stats || {})
-      } catch (e: any) {
-        console.error('Error loading tenant stats', e)
-      }
-    }
-
-    loadStats()
-  }, [tenants])
 
   return (
     <Card className="mt-8">

@@ -6,6 +6,19 @@ import { userHasFeature } from '@/lib/subscription/server'
 /**
  * POST /api/documents/process
  * Trigger AI processing for a document
+ *
+ * Request body: { documentId: string }
+ * Response: {
+ *   success: boolean,
+ *   message: string,
+ *   documentId: string,
+ *   validationStatus?: string, // e.g. 'COMPLETE' | 'NEEDS_REVIEW'
+ *   validationFlags?: string[], // e.g. ['DUPLICATE_DOCUMENT','WRONG_TENANT']
+ *   tenantCandidates?: Array<object>,
+ *   isMultiTenant?: boolean,
+ *   tenantCorrection?: object,
+ *   recordsCreated?: boolean // IMPORTANT: false indicates the processor skipped creating ledger/bank records (e.g. duplicate without existing transaction or unresolved wrong-tenant). UI should surface review/override actions.
+ * }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -89,7 +102,8 @@ export async function POST(request: NextRequest) {
       validationFlags: result.validationFlags,
       tenantCandidates: result.tenantCandidates ?? [],
       isMultiTenant: result.isMultiTenant ?? false,
-      tenantCorrection: result.tenantCorrection ?? { actionTaken: 'NONE' }
+      tenantCorrection: result.tenantCorrection ?? { actionTaken: 'NONE' },
+      recordsCreated: result.recordsCreated ?? true
     })
 
   } catch (error) {

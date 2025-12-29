@@ -411,7 +411,7 @@ export class AIProcessingService {
    * @param documentId - UUID of the document to process
    * @returns Promise<{ success: boolean, validationStatus?: string, validationFlags?: string[], error?: string, statusCode?: number }>
    */
-  static async processDocument(documentId: string): Promise<{ success: boolean, validationStatus?: string, validationFlags?: string[], tenantCandidates?: any[], isMultiTenant?: boolean, tenantCorrection?: TenantCorrectionInfo, error?: string, statusCode?: number }> {
+  static async processDocument(documentId: string): Promise<{ success: boolean, validationStatus?: string, validationFlags?: string[], tenantCandidates?: any[], isMultiTenant?: boolean, tenantCorrection?: TenantCorrectionInfo, recordsCreated?: boolean, error?: string, statusCode?: number }> {
     try {
       const supabase = await createClient()
 
@@ -458,6 +458,8 @@ export class AIProcessingService {
       let validationStatus = 'PENDING'
       let existingTransactionId: string | null = null
       let tenantCorrection: TenantCorrectionInfo = { actionTaken: 'NONE' }
+      // Whether this run created ledger/bank records. Default true; set false when skipped due to review flags.
+      let recordsCreated = true
 
       if (isDuplicate) {
         validationFlags.push('DUPLICATE_DOCUMENT')
@@ -990,10 +992,38 @@ export class AIProcessingService {
       }
 
       // 6. Create records based on type
-      if (extractedData.document_type === 'bank_statement') {
-        await this.createBankStatementRecords(document, extractedData, supabase)
+      // Determine if we should skip creating ledger/bank records when the document
+      // requires manual review. We do NOT want to auto-create transactions for
+      // duplicates (without an existing transaction) or for wrong-tenant documents
+      // that were not auto-corrected.
+      const isDuplicateFlag = validationFlags.includes('DUPLICATE_DOCUMENT') || isDuplicate === true
+      const isWrongTenantFlag = validationFlags.includes('WRONG_TENANT')
+
+      let skipCreation = false
+
+      // Skip when duplicate and there is no existing transaction to update
+      if (isDuplicateFlag && !existingTransactionId) {
+        skipCreation = true
+      }
+
+      // Skip when wrong tenant and tenantCorrection did not reassign/create a tenant
+      if (isWrongTenantFlag && tenantCorrection?.actionTaken === 'NONE') {
+        skipCreation = true
+      }
+
+      if (skipCreation) {
+        recordsCreated = false
+        // Persist that processing completed but records were intentionally skipped
+        await updateDocumentById(documentId, {
+          validation_status: validationStatus,
+          validation_flags: validationFlags
+        })
       } else {
-        await this.createDraftTransaction(document, extractedData, supabase, existingTransactionId)
+        if (extractedData.document_type === 'bank_statement') {
+          await this.createBankStatementRecords(document, extractedData, supabase)
+        } else {
+          await this.createDraftTransaction(document, extractedData, supabase, existingTransactionId)
+        }
       }
 
       // 7. Update document status to PROCESSED (or keep as NEEDS_REVIEW if flagged)
@@ -1005,13 +1035,14 @@ export class AIProcessingService {
         document_type: extractedData.document_type || this.inferDocumentType(extractedData)
       })
 
-      return { 
-        success: true, 
-        validationStatus, 
+      return {
+        success: true,
+        validationStatus,
         validationFlags,
         tenantCandidates,
         isMultiTenant,
-        tenantCorrection
+        tenantCorrection,
+        recordsCreated
       }
 
     } catch (error: any) {
@@ -1033,7 +1064,7 @@ export class AIProcessingService {
         error_message: errorMessage
       })
 
-      return { success: false, error: errorMessage, statusCode }
+      return { success: false, error: errorMessage, statusCode, recordsCreated: false }
     }
   }
 

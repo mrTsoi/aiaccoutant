@@ -288,7 +288,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.057587d29023",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 356,
+    "line": 359,
     kind: 'ltvars-call'
   },
   {
@@ -480,7 +480,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.09875eba5779",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 143,
+    "line": 144,
     kind: 'lt-call'
   },
   {
@@ -696,7 +696,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.0c91acbae2f9",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 122,
+    "line": 123,
     kind: 'lt-call'
   },
   {
@@ -824,7 +824,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.0eff330840f9",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 190,
+    "line": 192,
     kind: 'ltvars-call'
   },
   {
@@ -1640,7 +1640,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.1f5a1abf2f08",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 191,
+    "line": 193,
     kind: 'lt-call'
   },
   {
@@ -2208,7 +2208,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.2783c4577c78",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 177,
+    "line": 179,
     kind: 'lt-call'
   },
   {
@@ -2656,7 +2656,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.2f20927e7647",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 363,
+    "line": 366,
     kind: 'lt-call'
   },
   {
@@ -3248,7 +3248,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.38ec7fb58641",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 175,
+    "line": 177,
     kind: 'lt-call'
   },
   {
@@ -3528,7 +3528,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.3c25a75ff4c9",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 306,
+    "line": 309,
     kind: 'lt-call'
   },
   {
@@ -3576,7 +3576,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.3d1a24d11db5",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 326,
+    "line": 329,
     kind: 'lt-call'
   },
   {
@@ -5768,7 +5768,15 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.5fe61e2aae6b",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 251,
+    "line": 254,
+    kind: 'lt-call'
+  },
+  {
+    "text": "No transaction created — review required",
+    "key": "literal.6021914bec05",
+    namespace: 'literals',
+    "file": "src/components/documents/document-upload.tsx",
+    "line": 418,
     kind: 'lt-call'
   },
   {
@@ -6808,7 +6816,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.6f5c2cffee6c",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 139,
+    "line": 140,
     kind: 'lt-call'
   },
   {
@@ -7032,7 +7040,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.740f20a0cafc",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 275,
+    "line": 278,
     kind: 'lt-call'
   },
   {
@@ -7352,7 +7360,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.79eda34585a4",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 262,
+    "line": 265,
     kind: 'lt-call'
   },
   {
@@ -7616,7 +7624,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.7d62d002654d",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 283,
+    "line": 286,
     kind: 'lt-call'
   },
   {
@@ -8688,7 +8696,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.8f882639f1d7",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 97,
+    "line": 98,
     kind: 'lt-call'
   },
   {
@@ -10040,7 +10048,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.a3a4796ea28d",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 303,
+    "line": 306,
     kind: 'lt-call'
   },
   {
@@ -10264,7 +10272,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.a72e51300591",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 348,
+    "line": 351,
     kind: 'lt-call'
   },
   {
@@ -10384,7 +10392,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.a892c2007275",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 94,
+    "line": 95,
     kind: 'lt-call'
   },
   {
@@ -10808,7 +10816,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.b06aa8a6ed79",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 169,
+    "line": 171,
     kind: 'ltvars-call'
   },
   {
@@ -10824,7 +10832,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.b07c96827d8f",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 118,
+    "line": 119,
     kind: 'lt-call'
   },
   {
@@ -11600,7 +11608,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.bbf22ccd3ae8",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 125,
+    "line": 126,
     kind: 'lt-call'
   },
   {
@@ -11752,7 +11760,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.be2218931154",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 250,
+    "line": 253,
     kind: 'lt-call'
   },
   {
@@ -12168,7 +12176,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.c549a15a35e3",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 177,
+    "line": 179,
     kind: 'ltvars-call'
   },
   {
@@ -13040,7 +13048,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.d258feabaee8",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 269,
+    "line": 272,
     kind: 'lt-call'
   },
   {
@@ -13056,7 +13064,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.d29d3c138fd3",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 170,
+    "line": 172,
     kind: 'ltvars-call'
   },
   {
@@ -14328,7 +14336,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.e82effa3a945",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 181,
+    "line": 183,
     kind: 'lt-call'
   },
   {
@@ -14736,7 +14744,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.ef39e2ed660f",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 175,
+    "line": 177,
     kind: 'ltvars-call'
   },
   {
@@ -15440,7 +15448,7 @@ export const literalsManifest: LiteralManifestItem[] = [
     "key": "literal.fb6e37127d7f",
     namespace: 'literals',
     "file": "src/components/documents/document-upload.tsx",
-    "line": 179,
+    "line": 181,
     kind: 'lt-call'
   },
   {
