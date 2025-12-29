@@ -2133,7 +2133,9 @@
       "tenants": "Tenant Management",
       "pending": "Pending Subscriptions",
       "audit": "Audit Logs",
-      "languages": "Languages"
+      "languages": "Languages",
+      "processing": "Processing",
+      "security": "Security"
     },
     "unauthorized": "You are not authorized to view this admin area."
   },

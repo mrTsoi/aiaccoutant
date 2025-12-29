@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,11 +11,14 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useLiterals } from '@/hooks/use-literals';
+import { useTenant } from '@/hooks/use-tenant'
+import { createClient as createBrowserClient } from '@/lib/supabase/client'
 
 // Placeholder types and API calls
 // Replace with real types and API integration
 interface ScheduledJob {
   id: string;
+  tenantId?: string;
   source: string;
   frequency: string;
   lastRun: string;
@@ -38,78 +43,255 @@ export function AutomatedSyncSettings() {
   const [rotating, setRotating] = useState(false);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { currentTenant } = useTenant()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null);
   const [editFrequency, setEditFrequency] = useState('');
   const [editCustom, setEditCustom] = useState('');
   const [editError, setEditError] = useState('');
 
   useEffect(() => {
-    // Fetch initial state: enabled, webhookUrl, jobs
-    // Replace with real API calls
-    setEnabled(true);
-    setWebhookUrl(location.origin+'/api/external-sources/run?tenant_id=TENANT_ID&secret=SECRET');
-    setJobs([
-      {
-        id: '1',
-        source: 'Google Drive',
-        frequency: 'Every 6 hours',
-        lastRun: '2025-12-14 08:00',
-        nextRun: '2025-12-14 14:00',
-        status: 'success',
-      },
-    ]);
-    setLoading(false);
-  }, []);
+    // Fetch tenant-scoped state: enabled, webhookUrl, jobs
+    // Server MUST return only tenant-scoped schedules and secrets (RLS enforced)
+    const init = async () => {
+      setLoading(true)
+      try {
+        if (!currentTenant) return
+        const tenantId = currentTenant.id
+        // List external sources for tenant
+        const res = await fetch(`/api/external-sources?tenant_id=${encodeURIComponent(tenantId)}`)
+        if (!res.ok) {
+          setEnabled(false)
+          setJobs([])
+          return
+        }
+        const listJson = await res.json()
+        const sources = listJson?.data || []
+
+        // Fetch cron config (contains whether cron is configured/enabled and key prefix)
+        const cronRes = await fetch(`/api/external-sources/cron?tenant_id=${encodeURIComponent(tenantId)}`)
+        const cronJson = cronRes.ok ? await cronRes.json() : null
+        const configured = cronJson?.configured
+        setEnabled(!!cronJson?.enabled)
+
+        // If configured, we don't have the secret here (rotate endpoint returns it). Provide run URL without secret placeholder.
+        const keyPrefix = cronJson?.key_prefix
+        const secretPlaceholder = keyPrefix ? 'REDACTED' : ''
+        setWebhookUrl(`${location.origin}/api/external-sources/run?tenant_id=${tenantId}${secretPlaceholder ? `&secret=${secretPlaceholder}` : ''}`)
+
+        // Map sources to UI jobs
+        const mapped = (sources || []).map((s: any) => ({
+          id: String(s.id),
+          tenantId: s.tenant_id,
+          source: s.name || s.provider || 'Unknown',
+          frequency: s.schedule_minutes ? `${s.schedule_minutes} min` : '—',
+          lastRun: s.last_run_at || '-',
+          nextRun: '-',
+          status: s.last_run_at ? 'success' : 'pending',
+        }))
+        setJobs(mapped)
+      } catch (err) {
+        console.error('Error fetching automated sync settings', err)
+        setEnabled(false)
+        setJobs([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    init()
+  }, [currentTenant]);
 
   const handleRotateSecret = async () => {
     setRotating(true);
-    // Call API to rotate secret and update webhookUrl
-    setTimeout(() => {
-      setWebhookUrl('https://your-app.com/api/external-sources/run?tenant_id=TENANT_ID&secret=NEW_SECRET');
-      toast.success(lt('Secret rotated. Update your scheduler with the new URL.'));
-      setRotating(false);
-    }, 1000);
+    try {
+      if (!currentTenant) throw new Error('No tenant')
+      const tenantId = currentTenant.id
+      const res = await fetch(`/api/external-sources/cron/rotate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenantId }),
+      })
+      if (!res.ok) throw new Error('Rotate failed')
+      const json = await res.json()
+      const secret = json?.cron_secret
+      setWebhookUrl(`${location.origin}/api/external-sources/run?tenant_id=${tenantId}&secret=${secret}`)
+      toast.success(lt('Secret rotated. Update your scheduler with the new URL.'))
+    } catch (err) {
+      console.error(err)
+      toast.error(lt('Failed to rotate secret'))
+    } finally {
+      setRotating(false)
+    }
   };
 
   const handleRunNow = async () => {
     setRunning(true);
-    // Call API to trigger sync
-    setTimeout(() => {
-      toast.success(lt('Sync triggered.'));
-      setRunning(false);
-    }, 1000);
+    try {
+      if (!currentTenant) throw new Error('No tenant')
+      const tenantId = currentTenant.id
+      const res = await fetch(`/api/external-sources/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenantId }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error || 'Run failed')
+      }
+      const json = await res.json()
+      toast.success(lt('Sync triggered.'))
+      console.info('Run result', json)
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.message || lt('Failed to trigger sync'))
+    } finally {
+      setRunning(false)
+    }
   };
 
   const handleEditJob = (job: ScheduledJob) => {
-    setEditingJob(job);
-    setEditFrequency(FREQUENCIES.find(f => f.value === job.frequency) ? job.frequency : 'custom');
-    setEditCustom(FREQUENCIES.find(f => f.value === job.frequency) ? '' : job.frequency);
-    setEditError('');
+    const tenantId = currentTenant?.id
+    if (job.tenantId && tenantId && job.tenantId !== tenantId) {
+      toast.error(lt('You do not have permission to edit this schedule.'))
+      ;(async () => {
+        try {
+          const sup = createBrowserClient()
+          const { data } = await sup.auth.getUser()
+          const payload = {
+            event: 'cross_tenant_block',
+            details: {
+              action: 'edit_attempt',
+              target_tenant_id: job.tenantId,
+              attempted_by_tenant_id: tenantId,
+              user_id: data?.user?.id || null,
+              user_email: data?.user?.email || null,
+              source: 'automated-sync-ui',
+            },
+          }
+          await fetch('/api/security/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+        } catch (e) {
+          console.error('Failed to log security event', e)
+        }
+      })()
+      return
+    }
+    setEditingJob(job)
+    setEditFrequency(FREQUENCIES.find(f => f.value === job.frequency) ? job.frequency : 'custom')
+    setEditCustom(FREQUENCIES.find(f => f.value === job.frequency) ? '' : job.frequency)
+    setEditError('')
   };
 
   const handleSaveEdit = () => {
-    let freq = editFrequency === 'custom' ? editCustom.trim() : editFrequency;
-    if (!freq) {
-      setEditError(lt('Frequency is required.'));
-      return;
+    const tenantId = currentTenant?.id
+    if (!tenantId || !editingJob) {
+      setEditError(lt('No tenant selected'))
+      return
     }
-    // TODO: Add cron validation here if needed
-    setJobs(jobs => jobs.map(j => j.id === editingJob?.id ? { ...j, frequency: freq } : j));
-    setEditingJob(null);
-    setEditFrequency('');
-    setEditCustom('');
-    setEditError('');
-    toast.success(lt('Schedule updated.'));
+
+    let freq = editFrequency === 'custom' ? editCustom.trim() : editFrequency
+    if (!freq) {
+      setEditError(lt('Frequency is required.'))
+      return
+    }
+
+    const frequencyToMinutes = (f: string) => {
+      // Map common cron expressions to minutes; fallback to numeric parse
+      if (f === '*/15 * * * *') return 15
+      if (f === '0 * * * *') return 60
+      if (f === '0 0 * * *') return 1440
+      if (f === '0 0 * * 0') return 10080
+      const n = Number(f)
+      return Number.isFinite(n) && n > 0 ? Math.max(5, Math.floor(n)) : 60
+    }
+
+    const schedule_minutes = frequencyToMinutes(freq)
+
+    const payload: any = {
+      tenant_id: tenantId,
+      name: editingJob.source || 'Unnamed',
+      provider: 'SFTP',
+      enabled: true,
+      schedule_minutes,
+      config: {},
+    }
+    if (!editingJob.id.startsWith('new-')) payload.id = editingJob.id
+
+    // Call upsert API
+    fetch('/api/external-sources/upsert', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Save failed')
+        const j = await res.json()
+        const id = j?.id || editingJob.id
+        setJobs((prev) => {
+          if (editingJob.id.startsWith('new-')) {
+            return [{ id, tenantId: tenantId, source: editingJob.source, frequency: `${schedule_minutes} min`, lastRun: '-', nextRun: '-', status: 'pending' }, ...prev]
+          }
+          return prev.map((r) => (r.id === editingJob.id ? { ...r, id, frequency: `${schedule_minutes} min`, source: editingJob.source } : r))
+        })
+        setEditingJob(null)
+        setEditFrequency('')
+        setEditCustom('')
+        setEditError('')
+        toast.success(lt('Schedule updated.'))
+      })
+      .catch((err) => {
+        console.error(err)
+        setEditError(err?.message || lt('Failed to save'))
+      })
   };
 
   const handleDeleteJob = (id: string) => {
-    setJobs(jobs => jobs.filter(j => j.id !== id));
-    toast.success(lt('Schedule deleted.'));
+    const job = jobs.find(j => j.id === id)
+    const tenantId = currentTenant?.id
+    if (job?.tenantId && tenantId && job.tenantId !== tenantId) {
+      toast.error(lt('You do not have permission to delete this schedule.'))
+      ;(async () => {
+        try {
+          const sup = createBrowserClient()
+          const { data } = await sup.auth.getUser()
+          const payload = {
+            event: 'cross_tenant_block',
+            details: {
+              action: 'delete_attempt',
+              target_tenant_id: job.tenantId,
+              attempted_by_tenant_id: tenantId,
+              user_id: data?.user?.id || null,
+              user_email: data?.user?.email || null,
+              source: 'automated-sync-ui',
+            },
+          }
+          await fetch('/api/security/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+        } catch (e) {
+          console.error('Failed to log security event', e)
+        }
+      })()
+      return
+    }
+    // Call delete API
+    fetch('/api/external-sources/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ source_id: id }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Delete failed')
+        setJobs(jobs => jobs.filter(j => j.id !== id))
+        toast.success(lt('Schedule deleted.'))
+      })
+      .catch((err) => {
+        console.error(err)
+        toast.error(err?.message || lt('Failed to delete'))
+      })
   };
 
   const handleAddJob = () => {
+    const tenantId = currentTenant?.id
     setEditingJob({
       id: 'new-' + Date.now(),
+      tenantId,
       source: '',
       frequency: '0 * * * *',
       lastRun: '-',

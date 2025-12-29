@@ -9,6 +9,7 @@ import { TranslationManagement } from '@/components/admin/translation-management
 import { AIProviderManagement } from '@/components/admin/ai-provider-management'
 import { PlatformCustomizer } from '@/components/admin/platform-customizer'
 import { ProcessingSettings } from '@/components/admin/processing-settings'
+import { SecuritySettings } from '@/components/admin/security-settings'
 import { PendingSubscriptionsAdmin } from '@/components/admin/pending-subscriptions'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTranslations } from 'next-intl'
@@ -50,7 +51,8 @@ export default function AdminPage() {
           <TabsTrigger value="languages">{t('tabs.languages')}</TabsTrigger>
           <TabsTrigger value="translations">Translations</TabsTrigger>
           <TabsTrigger value="ai-providers">AI Providers</TabsTrigger>
-          <TabsTrigger value="processing">Processing</TabsTrigger>
+          <TabsTrigger value="processing">{t('tabs.processing')}</TabsTrigger>
+          <TabsTrigger value="security">{t('tabs.security')}</TabsTrigger>
           <TabsTrigger value="customization">Customization</TabsTrigger>
         </TabsList>
 
@@ -91,6 +93,10 @@ export default function AdminPage() {
 
         <TabsContent value="processing">
           <ProcessingSettings />
+        </TabsContent>
+
+        <TabsContent value="security">
+          <SecuritySettings />
         </TabsContent>
 
         <TabsContent value="customization">

@@ -18,7 +18,8 @@
     "i18n:sync": "node scripts/sync-translations.js",
     "i18n:import-literals": "node scripts/i18n-import-literals.mjs",
     "i18n:import-subscription-plans": "node scripts/i18n-import-subscription-plans.mjs",
-    "i18n:sync-entity-translations": "node scripts/sync-entity-translations-from-literals.mjs"
+    "i18n:sync-entity-translations": "node scripts/sync-entity-translations-from-literals.mjs",
+    "rotate:internal-secret": "node scripts/rotate-internal-secret.mjs"
   },
   "dependencies": {
     "@google-cloud/documentai": "^9.5.0",
