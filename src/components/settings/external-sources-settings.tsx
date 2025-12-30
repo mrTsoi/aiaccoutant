@@ -228,7 +228,7 @@ export function ExternalSourcesSettings() {
       } finally {
         setLoading(false)
       }
-    }, [sourceId])
+    }, [sourceId, storageKey])
 
     useEffect(() => { void fetchPage('root', null) }, [fetchPage])
 
@@ -676,7 +676,6 @@ export function ExternalSourcesSettings() {
               minWidth: 380,
               maxWidth: 1100,
               minHeight: 300,
-              minWidth: 380,
               width: '60vw',
               overflowY: 'auto',
               resize: 'both',

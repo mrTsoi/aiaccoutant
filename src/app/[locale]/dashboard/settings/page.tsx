@@ -81,69 +81,14 @@ export default function SettingsPage() {
       <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="profile">{lt('Profile')}</TabsTrigger>
-          <TabsTrigger value="security">{lt('Security')}</TabsTrigger>
-          <TabsTrigger value="general">{lt('Tenant')}</TabsTrigger>
-          {!subLoading && hasCustomDomain && <TabsTrigger value="domains">{lt('Domains')}</TabsTrigger>}
-          {!subLoading && hasBankFeeds && <TabsTrigger value="bank-feeds">{lt('Bank Feeds')}</TabsTrigger>}
-          <TabsTrigger value="external-sources">{lt('External Sources')}</TabsTrigger>
           <TabsTrigger value="billing">{lt('Billing & Plans')}</TabsTrigger>
-          {!subLoading && hasCustomAiProvider && <TabsTrigger value="ai">{lt('AI Integration')}</TabsTrigger>}
-          {!subLoading && hasTaxAutomation && <TabsTrigger value="tax">{lt('Tax')}</TabsTrigger>}
         </TabsList>
-        
         <TabsContent value="profile" className="space-y-4">
           <ProfileSettings />
         </TabsContent>
-
-        <TabsContent value="security" className="space-y-4">
-          <SecuritySettings />
-        </TabsContent>
-
-        <TabsContent value="general" className="space-y-4">
-          {/* Show the company profile settings only for non-admin users; admins manage via the tenant management table below */}
-          {!canSeeTenantAdmin && <TenantSettings />}
-          {/* Tenant management merged into the Tenant tab for admins */}
-          {canSeeTenantAdmin && (
-            <TenantManagement />
-          )}
-          <BatchProcessingConfig />
-          <TenantMismatchPolicyTenantSettings />
-          <ExchangeRateList />
-        </TabsContent>
-
-        {!subLoading && hasCustomDomain && (
-          <TabsContent value="domains" className="space-y-4">
-            <DomainSettings />
-          </TabsContent>
-        )}
-
-        {!subLoading && hasBankFeeds && (
-          <TabsContent value="bank-feeds" className="space-y-4">
-            <BankFeedSettings />
-          </TabsContent>
-        )}
-
-        <TabsContent value="external-sources" className="space-y-4">
-          <ExternalSourcesSettings />
-        </TabsContent>
-        
         <TabsContent value="billing" className="space-y-4">
           <BillingSettings />
         </TabsContent>
-
-        {!subLoading && hasCustomAiProvider && (
-          <TabsContent value="ai" className="space-y-4">
-            <AISettings />
-          </TabsContent>
-        )}
-
-        {!subLoading && hasTaxAutomation && (
-          <TabsContent value="tax" className="space-y-4">
-            <TaxSettings />
-          </TabsContent>
-        )}
-
-        {/* tenant-admin tab removed: merged into 'Tenant' general tab */}
       </Tabs>
     </div>
   )

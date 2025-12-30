@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useTenant, useUserRole } from "@/hooks/use-tenant";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import TenantDetails from '@/components/admin/tenant-details'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from "@/components/ui/button";
 import { Loader2, Download, Upload, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -15,7 +17,9 @@ export default function TenantAdminDashboard() {
   const lt = useLiterals();
 
   const [loading, setLoading] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [expandedTenantId, setExpandedTenantId] = useState<string | null>(null);
+  const [tenantStats, setTenantStats] = useState<Record<string, any>>({});
   const [documentsByTenant, setDocumentsByTenant] = useState<Record<string, any[]>>({});
   const [docLoading, setDocLoading] = useState<string | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
@@ -134,6 +138,28 @@ export default function TenantAdminDashboard() {
 
   const filteredTenants = tenants?.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.slug.toLowerCase().includes(search.toLowerCase()));
 
+  useEffect(() => {
+    let mounted = true
+    const loadStats = async () => {
+      try {
+        const ids = (tenants || []).map(t => t.id).filter(Boolean)
+        if (ids.length === 0) return
+        const res = await fetch('/api/tenant-admin/stats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantIds: ids }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json?.error || 'Failed to load tenant stats')
+        if (mounted) setTenantStats(json.stats || {})
+      } catch (e: any) {
+        console.error('Failed to load tenant stats', e)
+      }
+    }
+    loadStats()
+    return () => { mounted = false }
+  }, [tenants])
+
   if (!filteredTenants || filteredTenants.length === 0) {
     return (
       <Card className="mt-8">
@@ -144,6 +170,9 @@ export default function TenantAdminDashboard() {
       </Card>
     );
   }
+
+  // open details by selecting tenant id; `TenantDetails` component will fetch details
+  const openTenantDetails = (tenantId: string) => setSelectedTenantId(tenantId)
 
   return (
     <Card className="mt-8">
@@ -165,6 +194,20 @@ export default function TenantAdminDashboard() {
                   <div className="font-semibold text-lg">{tenant.name}</div>
                   <div className="text-sm text-gray-500">{lt("Slug")}: {tenant.slug}</div>
                   <div className="text-xs text-gray-400">{lt("Created")}: {lt(tenant.created_at)}</div>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-700">
+                    <span className="flex items-center gap-1">
+                      {lt('Docs')}: {tenantStats[tenant.id]?.documents ?? '—'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {lt('Txns')}: {tenantStats[tenant.id]?.transactions ?? '—'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {lt('Users')}: {tenantStats[tenant.id]?.users ?? '—'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {lt('Bank Accts')}: {tenantStats[tenant.id]?.bank_accounts ?? '—'}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={() => {
@@ -176,6 +219,9 @@ export default function TenantAdminDashboard() {
                     }
                   }}>
                     {expandedTenantId === tenant.id ? lt("Hide Documents") : lt("Show Documents")}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => openTenantDetails(tenant.id)}>
+                    {lt('View Details')}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => handleBackup(tenant.id)} disabled={backupLoading}>
                     {backupLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />} {lt("Backup")}
@@ -243,6 +289,15 @@ export default function TenantAdminDashboard() {
             </div>
           ))}
         </div>
+
+        {selectedTenantId && (
+          <TenantDetails
+            tenantId={selectedTenantId}
+            onClose={() => setSelectedTenantId(null)}
+            onSaved={() => { setSelectedTenantId(null); refreshTenants(); }}
+          />
+        )}
+
       </CardContent>
     </Card>
   );
