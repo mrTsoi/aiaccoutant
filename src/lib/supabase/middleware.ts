@@ -99,6 +99,7 @@ export async function updateSession(request: NextRequest) {
     !pathWithoutLocale.startsWith('/login') &&
     !pathWithoutLocale.startsWith('/signup') &&
     !pathWithoutLocale.startsWith('/auth') &&
+    !pathWithoutLocale.startsWith('/forgot-password') &&
     pathWithoutLocale !== '/' // Allow landing page if exists
   ) {
     const url = request.nextUrl.clone()

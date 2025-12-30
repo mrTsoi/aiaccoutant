@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLiterals } from '@/hooks/use-literals'
 import Link from 'next/link'
+import Image from 'next/image'
+import usePlatform from '@/hooks/use-platform'
 
 export default function LoginForm() {
   const lt = useLiterals()
@@ -21,6 +23,8 @@ export default function LoginForm() {
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+
+  const { platform } = usePlatform()
 
   const locale = (pathname?.split('/')?.[1] || 'en') as string
 
@@ -117,7 +121,15 @@ export default function LoginForm() {
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">{lt('Login to LedgerAI')}</CardTitle>
+          <div className="flex items-center gap-3">
+            {platform?.logo_url ? (
+              <Image src={platform.logo_url} alt={platform?.name || 'Logo'} className="w-8 h-8 object-contain rounded-lg" width={32} height={32} />
+            ) : (
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">{(platform?.name && platform.name[0]) ? String(platform.name[0]).toUpperCase() : 'L'}</div>
+            )}
+            <div className="text-lg font-semibold text-gray-900">{platform?.name || 'LedgerAI'}</div>
+          </div>
+          <CardTitle className="text-2xl font-bold">{lt('login')}</CardTitle>
           <CardDescription>
             {showMfaInput ? lt('Enter your 2FA code') : lt('Enter your credentials to access your account')}
           </CardDescription>
@@ -194,12 +206,19 @@ export default function LoginForm() {
                 : (showMfaInput ? lt('Verify') : lt('Login'))}
             </Button>
             {!showMfaInput && (
-              <p className="text-sm text-center text-gray-600">
-                {lt("Don't have an account?")}{' '}
-                <Link href="/signup" className="text-primary hover:underline">
-                  {lt('Sign up')}
-                </Link>
-              </p>
+              <>
+                <p className="text-sm text-right w-full">
+                  <Link href={`/${locale}/forgot-password`} className="text-sm text-primary hover:underline">
+                    {lt('forgotPassword')}
+                  </Link>
+                </p>
+                <p className="text-sm text-center text-gray-600">
+                  {lt("Don't have an account?")}{' '}
+                  <Link href={`/${locale}/signup`} className="text-primary hover:underline">
+                    {lt('Sign up')}
+                  </Link>
+                </p>
+              </>
             )}
           </CardFooter>
         </form>

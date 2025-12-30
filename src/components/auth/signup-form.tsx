@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label'
 import { useLiterals } from '@/hooks/use-literals'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
+import Image from 'next/image'
+import usePlatform from '@/hooks/use-platform'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 type Plan = { id: string; name: string; description: string; price_monthly: number; price_yearly?: number; yearly_discount_percent?: number }
@@ -27,6 +29,8 @@ export default function SignupForm() {
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+
+  const { platform } = usePlatform()
 
   const locale = (pathname?.split('/')?.[1] || 'en') as string
 
@@ -151,7 +155,7 @@ export default function SignupForm() {
                 {lt('Click the link in the email to activate your account and sign in.')}
               </p>
             </div>
-            <Button className="w-full" variant="outline" onClick={() => router.push('/login')}>
+            <Button className="w-full" variant="outline" onClick={() => router.push(`/${locale}/login`)}>
               {lt('Go to Login')}
             </Button>
           </CardContent>
@@ -164,6 +168,14 @@ export default function SignupForm() {
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
+          <div className="flex items-center gap-3">
+            {platform?.logo_url ? (
+              <Image src={platform.logo_url} alt={platform?.name || 'Logo'} className="w-8 h-8 object-contain rounded-lg" width={32} height={32} />
+            ) : (
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">{(platform?.name && platform.name[0]) ? String(platform.name[0]).toUpperCase() : 'L'}</div>
+            )}
+            <div className="text-lg font-semibold text-gray-900">{platform?.name || 'LedgerAI'}</div>
+          </div>
           <CardTitle className="text-2xl font-bold">{lt('Create an Account')}</CardTitle>
           <CardDescription>
             {lt('Enter your information to get started with LedgerAI')}
