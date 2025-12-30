@@ -1,5 +1,4 @@
 import {getRequestConfig} from 'next-intl/server';
-import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -77,9 +76,14 @@ export default getRequestConfig(async ({requestLocale}) => {
   // 2. Load DB messages
   if (supabaseUrl && supabaseKey) {
     try {
+      // Dynamically import Supabase to avoid pulling Node-only APIs into modules
+      // that may run in the Edge runtime. The package reads `process.version` on
+      // import which triggers Next.js Edge runtime warnings.
+      const { createClient } = await import('@supabase/supabase-js')
+
       // Use a plain client to avoid cookie/header issues during i18n loading.
       // RLS policies on app_translations allow public read, so anon key is sufficient.
-      const supabase = createClient(supabaseUrl, supabaseKey)
+      const supabase = createClient(supabaseUrl, supabaseKey as string)
 
       // Legacy alias handling:
       // - If DB still contains zh-TW rows, treat them as fallback.

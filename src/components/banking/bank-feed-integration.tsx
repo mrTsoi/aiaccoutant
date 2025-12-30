@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { usePlaidLink } from 'react-plaid-link'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant, useUserRole } from '@/hooks/use-tenant'
@@ -104,7 +105,8 @@ export function BankFeedIntegration() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, tenantId, lt])
+  }, [supabase, tenantId, lt, hasBankFeature])
+  
 
   const fetchWebhookKey = useCallback(async () => {
     if (!tenantId || !canManage) return
@@ -128,7 +130,7 @@ export function BankFeedIntegration() {
 
       setWebhookKeyRow(null)
     }
-  }, [supabase, tenantId, canManage])
+  }, [supabase, tenantId, canManage, hasBankFeature])
 
   const fetchLinkToken = useCallback(async () => {
     if (!tenantId) return
@@ -157,7 +159,7 @@ export function BankFeedIntegration() {
       setPlaidConfigured(null)
       setPlaidUiMessage(e?.message || lt('Failed to start Plaid connection'))
     }
-  }, [tenantId, lt])
+  }, [tenantId, lt, hasBankFeature])
 
   useEffect(() => {
     fetchConnection()
@@ -190,7 +192,7 @@ export function BankFeedIntegration() {
       console.error('Error fetching bank accounts for webhook test:', e)
       setTestAccount(null)
     }
-  }, [supabase, tenantId, canManage])
+  }, [supabase, tenantId, canManage, hasBankFeature])
 
   useEffect(() => {
     fetchTestAccount()
@@ -422,9 +424,9 @@ export function BankFeedIntegration() {
             {lt('Bank feeds are available only on paid plans that include this feature. Please upgrade your subscription or contact your tenant administrator.')}
           </div>
           <div className="mt-4">
-              <a href="/dashboard/settings?tab=billing" className="no-underline">
+            <Link href="/dashboard/settings?tab=billing" className="no-underline">
               <Button>{lt('Upgrade')}</Button>
-            </a>
+            </Link>
           </div>
         </CardContent>
       </Card>

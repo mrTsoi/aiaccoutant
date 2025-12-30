@@ -459,7 +459,14 @@ export class AIProcessingService {
       const hash = crypto.createHash('sha256').update(buffer).digest('hex')
 
       // Check for duplicates
-      const dupResp = await findDocumentsByTenantAndHash(docRow.tenant_id, hash, documentId)
+      // Dynamically import these helpers instead of using static imports so:
+      // - Test runners (Vitest) that mock the module exports will be respected
+      //   by runtime callers (dynamic import resolves to the mocked module).
+      // - We avoid capturing stale references to functions at module-eval time,
+      //   which improves testability and makes mocks reliable during isolated
+      //   test runs.
+      const typed = await import('@/lib/supabase/typed')
+      const dupResp = await typed.findDocumentsByTenantAndHash(docRow.tenant_id, hash, documentId)
 
       const duplicates = Array.isArray(dupResp.data) ? (dupResp.data as Array<{ id: string }>) : []
       const isDuplicate = duplicates && duplicates.length > 0
@@ -478,7 +485,7 @@ export class AIProcessingService {
         // Find if there is an existing transaction for the original document
         // We use the first duplicate found as the "original"
         const originalDocId = duplicates[0].id
-        const txResp = await findTransactionByDocumentId(originalDocId)
+        const txResp = await typed.findTransactionByDocumentId(originalDocId)
 
         const existingTx = txResp.data as { id: string } | null
         if (existingTx) {
@@ -1118,8 +1125,10 @@ export class AIProcessingService {
         skipCreation = true
       }
 
-      // Skip when wrong tenant and tenantCorrection did not reassign/create a tenant
-      if (isWrongTenantFlag && tenantCorrection?.actionTaken === 'NONE') {
+      // Skip when wrong tenant and tenantCorrection did not reassign/create a tenant.
+      // However, if there is an existing transaction for the original document,
+      // prefer updating that transaction rather than skipping creation entirely.
+      if (isWrongTenantFlag && tenantCorrection?.actionTaken === 'NONE' && !existingTransactionId) {
         skipCreation = true
       }
 
