@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import OpenAI from 'openai'
-import { DocumentProcessorServiceClient } from '@google-cloud/documentai'
+// Use dynamic factories to avoid importing Node-only SDKs at module evaluation time
 
 export async function POST(request: Request) {
   try {
@@ -10,6 +9,11 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: isSuperAdmin, error } = await (supabase as any).rpc('is_super_admin')
+    if (error || isSuperAdmin !== true) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -32,7 +36,8 @@ export async function POST(request: Request) {
             }
         }
         
-        const client = new DocumentProcessorServiceClient(clientConfig)
+        const { createDocumentAIClient } = await import('@/integrations/google/documentai-client')
+        const client = await createDocumentAIClient(clientConfig)
         
         if (config.projectId && config.location && config.processorId) {
              const name = `projects/${config.projectId}/locations/${config.location}/processors/${config.processorId}`
@@ -56,7 +61,8 @@ export async function POST(request: Request) {
         const config = typeof customConfig === 'string' ? JSON.parse(customConfig) : customConfig
         const baseURL = config.baseUrl || (providerName === 'deepseek-ocr' ? 'https://api.deepseek.com' : undefined)
         
-        const openai = new OpenAI({
+        const { createOpenAIClient } = await import('@/lib/ai/openai-client')
+        const openai = await createOpenAIClient({
           apiKey: apiKey,
           baseURL: baseURL,
           defaultHeaders: providerName === 'openrouter' ? {
